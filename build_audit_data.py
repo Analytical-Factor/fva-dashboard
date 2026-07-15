@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -61,6 +61,12 @@ def canonical_source(value: object) -> str:
     return label
 
 
+def parse_target_month(value: object) -> datetime:
+    if isinstance(value, (date, datetime)):
+        return datetime(value.year, value.month, 1)
+    return datetime.strptime(str(value).strip(), "%b-%y")
+
+
 def load_workbook_data(path: Path) -> tuple[dict, list[list]]:
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
@@ -82,12 +88,12 @@ def load_workbook_data(path: Path) -> tuple[dict, list[list]]:
         abc_rows = keyed_rows(section(kpi_rows, "5. ABC Class Breakdown", None))
 
         parts: list[list] = []
-        target_months: set[str] = set()
+        target_months: set[datetime] = set()
         for row in part_sheet.iter_rows(min_row=2, values_only=True):
             if not row[0]:
                 continue
             item, description, abc_class, target_month, status, source = row[:6]
-            target_months.add(str(target_month))
+            target_months.add(parse_target_month(target_month))
             parts.append(
                 [
                     str(item),
@@ -102,8 +108,7 @@ def load_workbook_data(path: Path) -> tuple[dict, list[list]]:
         if len(target_months) != 1:
             raise ValueError(f"{path.name}: expected one target month, found {target_months}")
 
-        target_month_text = target_months.pop()
-        target_month = datetime.strptime(target_month_text, "%b-%y")
+        target_month = target_months.pop()
         total = as_int(overall["Total Items"][1])
         reconciled = as_int(overall["Reconciled"][1])
         exceptions = as_int(overall["Exceptions"][1])

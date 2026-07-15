@@ -1,6 +1,6 @@
 # Demand Planning Audit Dashboard
 
-This standalone dashboard reads the five monthly audit workbooks in this repository and presents their KPI and Part-Level data in one responsive page.
+This standalone dashboard reads the six monthly audit workbooks in this repository and presents their KPI and Part-Level data in one responsive page.
 
 ## Included Data
 
@@ -9,6 +9,7 @@ This standalone dashboard reads the five monthly audit workbooks in this reposit
 - March 2026
 - April 2026
 - May 2026
+- June 2026 (from the workbook named `EMR - Audit Reports - June 2025.xlsx`)
 
 The KPI view includes overall status, reconciliation type, planner adjustments, forecast-source distribution, and ABC-class breakdown.
 
@@ -19,11 +20,13 @@ The Part-Level view supports:
 - Search, status/source/ABC filters, pagination, and CSV export
 - Per-item counts across the latest six available audit months for automatically reconciled, adjusted, and manually accepted periods
 
-`Adjusted` counts Part-Level statuses containing `with user overrides`. The source workbooks do not expose an independent override flag for rows classified as `Automatically Reconciled`, so those rows cannot be attributed as item-level adjustments. The aggregate Planner Overrides KPI remains the exact value from the KPI sheet. `Manually accepted` counts both accepted statuses, with and without a user override, and excludes automatic reconciliation. This repository currently contains five audit months, so the six-month metrics use all five available months and will automatically expand to six when another workbook is added.
+`Adjusted` counts Part-Level statuses containing `with user overrides`. The source workbooks do not expose an independent override flag for rows classified as `Automatically Reconciled`, so those rows cannot be attributed as item-level adjustments. The aggregate Planner Overrides KPI remains the exact value from the KPI sheet. `Manually accepted` counts both accepted statuses, with and without a user override, and excludes automatic reconciliation. The six-month metrics use all six available audit months.
 
 ## Open The Dashboard
 
-Open `index.html` in a browser. The latest available month is selected by default.
+Open `login.html` or `index.html` in a browser and sign in with the configured static credentials. The latest available month is selected by default.
+
+Authentication is intentionally client-side and session-only. It does not provide secure access control because the credentials and validation logic are visible in the static files. Closing the browser tab or selecting Log out ends the session.
 
 ## Refresh The Data
 
@@ -45,6 +48,7 @@ node validate_dashboard_ui.js
 ## Files
 
 - `index.html`: GitHub Pages entry point, dashboard layout, and interactions
+- `login.html`: static sign-in page
 - `shared.css`: dashboard styling
 - `audit-data.js`: generated KPI and Part-Level browser data
 - `build_audit_data.py`: workbook extraction and validation

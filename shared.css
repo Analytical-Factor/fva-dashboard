@@ -52,7 +52,18 @@ button { color: inherit; }
 }
 .brand-name { font-size: 20px; font-weight: 750; letter-spacing: -0.4px; }
 .current-section { color: var(--teal); font-weight: 800; }
-.user { margin-left: auto; font-weight: 700; }
+.user-menu { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.user { font-weight: 700; }
+.logout-button {
+  border: 0;
+  padding: 5px 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.logout-button:hover { color: var(--navy); }
 
 .page { width: min(1540px, calc(100% - 48px)); max-width: 100%; margin: 0 auto; padding: 28px 0 46px; }
 .eyebrow { color: var(--teal); text-transform: uppercase; letter-spacing: 1.4px; font-size: 11px; font-weight: 800; }

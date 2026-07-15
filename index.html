@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Demand Planning Audit Center</title>
+  <script>
+    if (sessionStorage.getItem("afAuditDashboardAuthenticated") !== "true") {
+      window.location.replace("login.html");
+    }
+  </script>
   <link rel="stylesheet" href="shared.css">
   <style>
     .hero { display: flex; justify-content: space-between; gap: 28px; align-items: flex-end; margin-bottom: 24px; }
@@ -125,7 +130,7 @@
     <header class="topbar">
       <div class="brand"><div class="brand-mark">AF</div><div class="brand-name">Demand Planning</div></div>
       <div class="current-section">Audit Center</div>
-      <div class="user">Sharon</div>
+      <div class="user-menu"><span class="user">Sharon</span><button class="logout-button" id="logoutButton" type="button">Log out</button></div>
     </header>
 
     <main class="page">
@@ -703,6 +708,10 @@
     document.getElementById("nextPage").addEventListener("click", () => { state.page += 1; renderParts(); });
     document.getElementById("exportKpi").addEventListener("click", exportKpiReport);
     document.getElementById("exportParts").addEventListener("click", exportPartRows);
+    document.getElementById("logoutButton").addEventListener("click", () => {
+      sessionStorage.removeItem("afAuditDashboardAuthenticated");
+      window.location.replace("login.html");
+    });
     document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach(item => item.classList.remove("active")); tab.classList.add("active");
       const isKpi = tab.dataset.view === "kpi";

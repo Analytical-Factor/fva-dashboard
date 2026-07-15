@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -35,6 +35,12 @@ def canonical_source(value: object) -> str:
     if label.lower() == "volume-adjusted / scaled blend":
         return "Volume-adjusted / scaled blend"
     return label
+
+
+def parse_target_month(value: object) -> datetime:
+    if isinstance(value, (date, datetime)):
+        return datetime(value.year, value.month, 1)
+    return datetime.strptime(str(value).strip(), "%b-%y")
 
 
 def find_row(rows: list[tuple], label: str) -> int:
@@ -75,7 +81,11 @@ def load_payload() -> dict:
     return json.loads(text[payload_start + len(DATA_PREFIX) : -1])
 
 
-def validate_workbook(path: Path, payload_month: dict, payload_parts: list[list]) -> dict:
+def validate_workbook(
+    path: Path,
+    payload_months: dict[str, dict],
+    payload_parts_by_month: dict[str, list[list]],
+) -> dict:
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
         if workbook.sheetnames != ["KPIs", "Part Level Breakdown"]:
@@ -108,11 +118,15 @@ def validate_workbook(path: Path, payload_month: dict, payload_parts: list[list]
         if duplicate_items:
             raise AssertionError(f"{path.name}: duplicate items {duplicate_items[:10]}")
 
-        target_months = {str(row[3]) for row in raw_parts}
+        target_months = {parse_target_month(row[3]) for row in raw_parts}
         if len(target_months) != 1:
             raise AssertionError(f"{path.name}: target months {sorted(target_months)}")
-        target_month = datetime.strptime(target_months.pop(), "%b-%y")
+        target_month = target_months.pop()
         month_key = target_month.strftime("%Y-%m")
+        if month_key not in payload_months or month_key not in payload_parts_by_month:
+            raise AssertionError(f"{path.name}: month {month_key} missing from audit-data.js")
+        payload_month = payload_months[month_key]
+        payload_parts = payload_parts_by_month[month_key]
 
         expected_parts = [
             [
@@ -382,14 +396,13 @@ def main() -> None:
     workbook_results = []
     expected_keys = []
     for path in workbook_paths:
-        filename_month = datetime.strptime(path.stem.rsplit(" - ", 1)[1], "%B %Y")
-        key = filename_month.strftime("%Y-%m")
-        expected_keys.append(key)
-        if key not in payload_months or key not in payload["partsByMonth"]:
-            raise AssertionError(f"{path.name}: month {key} missing from audit-data.js")
-        workbook_results.append(
-            validate_workbook(path, payload_months[key], payload["partsByMonth"][key])
+        result = validate_workbook(
+            path,
+            payload_months,
+            payload["partsByMonth"],
         )
+        expected_keys.append(result["key"])
+        workbook_results.append(result)
 
     expected_keys.sort()
     payload_keys = [month["key"] for month in payload["months"]]

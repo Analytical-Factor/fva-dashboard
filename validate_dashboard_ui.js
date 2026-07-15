@@ -123,7 +123,28 @@ async function main() {
   page.on("pageerror", (error) => browserErrors.push(error.message));
 
   try {
-    await page.goto(pathToFileURL(path.join(ROOT, "index.html")).href);
+    const indexUrl = pathToFileURL(path.join(ROOT, "index.html")).href;
+    const loginUrl = pathToFileURL(path.join(ROOT, "login.html")).href;
+
+    await page.goto(indexUrl);
+    await page.waitForURL(loginUrl);
+    assert(await page.locator("#loginForm").isVisible(), "Unauthenticated dashboard access did not redirect to login");
+
+    await page.locator("#username").fill("Sharon");
+    await page.locator("#password").fill("incorrect");
+    await page.locator("#loginForm button[type=submit]").click();
+    assert(await page.locator("#loginError").isVisible(), "Invalid credentials were not rejected");
+    assert(page.url() === loginUrl, "Invalid credentials left the login page");
+
+    await page.locator("#username").fill("sharon");
+    await page.locator("#password").fill("AFUser123");
+    await page.locator("#loginForm button[type=submit]").click();
+    assert(await page.locator("#loginError").isVisible(), "Incorrect username casing was not rejected");
+
+    await page.locator("#username").fill("Sharon");
+    await page.locator("#password").fill("AFUser123");
+    await page.locator("#loginForm button[type=submit]").click();
+    await page.waitForURL(indexUrl);
     await page.waitForSelector("#monthStrip .month");
 
     assert(
@@ -305,6 +326,14 @@ async function main() {
       sample.item + ": activity metrics mismatch"
     );
     assert(browserErrors.length === 0, "Browser errors: " + browserErrors.join("; "));
+
+    await page.locator("#logoutButton").click();
+    await page.waitForURL(loginUrl);
+    assert(await page.locator("#loginForm").isVisible(), "Logout did not return to login");
+    assert(
+      await page.evaluate(() => sessionStorage.getItem("afAuditDashboardAuthenticated")) === null,
+      "Logout did not clear the authentication session"
+    );
 
     console.log(
       "Browser dashboard validation: PASS ("
