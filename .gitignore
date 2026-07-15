@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.chrome-*/
+dashboard-*-check*.png

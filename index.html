@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demand Planning Audit Center</title>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    .hero { display: flex; justify-content: space-between; gap: 28px; align-items: flex-end; margin-bottom: 24px; }
+    .hero-actions { display: flex; gap: 9px; }
+    .control-deck { padding: 0 20px; margin-bottom: 22px; }
+    .control-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .month-strip { display: flex; align-items: stretch; gap: 2px; width: 100%; min-width: 0; padding: 12px 0; overflow-x: auto; }
+    .month {
+      min-width: 78px; border: 0; background: transparent; border-radius: 9px; padding: 8px 12px;
+      cursor: pointer; color: var(--muted); text-align: left;
+    }
+    .month span { display: block; font-weight: 800; color: inherit; }
+    .month small { font-size: 10px; }
+    .month.active { color: #fff; background: var(--navy); box-shadow: 0 7px 14px rgba(10,53,83,.18); }
+    .compare { display: flex; align-items: center; gap: 9px; white-space: nowrap; color: var(--muted); font-weight: 700; }
+    .compare-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--orange); }
+    .dashboard { display: grid; grid-template-columns: minmax(0, 1.72fr) minmax(300px, .78fr); gap: 18px; min-width: 0; }
+    .main-column, .side-column { display: grid; gap: 18px; min-width: 0; align-content: start; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+    .metric { padding: 17px 18px 16px; min-height: 138px; position: relative; overflow: hidden; }
+    .metric::after { content: ""; position: absolute; width: 86px; height: 86px; border-radius: 50%; right: -28px; top: -28px; background: rgba(11,127,130,.07); }
+    .metric-label { color: var(--muted); text-transform: uppercase; letter-spacing: .7px; font-size: 10px; font-weight: 800; }
+    .metric-value { font-size: 31px; font-weight: 800; letter-spacing: -1px; margin: 12px 0 5px; }
+    .metric-foot { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+    .delta { font-weight: 800; color: var(--teal); }
+    .delta.down { color: var(--red); }
+    .trend-card { padding: 20px; }
+    .status-chart { height: 248px; margin-top: 20px; display: grid; grid-template-columns: 38px 1fr; gap: 12px; }
+    .y-axis { display: flex; flex-direction: column; justify-content: space-between; height: 194px; color: var(--muted); font-size: 10px; text-align: right; }
+    .bar-plot { height: 218px; display: flex; justify-content: space-around; align-items: end; gap: 20px; padding: 0 12px; border-bottom: 1px solid #dce5e8; background: repeating-linear-gradient(to bottom, #dce5e8 0 1px, transparent 1px 48px); }
+    .bar-group { width: 72px; height: 218px; display: grid; grid-template-rows: 22px 172px 24px; align-items: end; text-align: center; }
+    .bar-rate { color: var(--navy); font-size: 11px; font-weight: 800; align-self: start; }
+    .stacked-bar { width: 42px; height: 172px; margin: 0 auto; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; border-radius: 7px 7px 2px 2px; box-shadow: 0 0 0 1px rgba(16,42,58,.07); }
+    .bar-segment { width: 100%; transition: height .25s ease; }
+    .bar-segment.exceptions { background: #dce5e8; }
+    .bar-segment.reconciled { background: var(--teal); }
+    .bar-group.current .stacked-bar { box-shadow: 0 0 0 2px var(--orange); }
+    .bar-group.current .bar-label { color: var(--orange); }
+    .bar-label { color: var(--muted); font-size: 11px; font-weight: 700; align-self: end; }
+    .chart-legend { display: flex; gap: 18px; font-size: 11px; color: var(--muted); }
+    .legend-box { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: middle; }
+    .composition { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .composition .card { padding: 20px; }
+    .donut-wrap { display: flex; align-items: center; gap: 24px; margin-top: 22px; }
+    .donut { width: 132px; height: 132px; border-radius: 50%; background: conic-gradient(var(--teal) 0 51.43%, var(--orange) 51.43% 100%); position: relative; flex: none; }
+    .donut::after { content: ""; position: absolute; inset: 23px; background: #fff; border-radius: 50%; }
+    .donut-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; z-index: 1; }
+    .donut-center strong { font-size: 22px; }
+    .donut-center span { color: var(--muted); font-size: 10px; }
+    .legend-list { display: grid; gap: 12px; flex: 1; }
+    .legend-row { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; }
+    .swatch { width: 8px; height: 8px; border-radius: 2px; }
+    .legend-row strong { font-size: 13px; }
+    .legend-row small { color: var(--muted); }
+    .source-bar { display: flex; height: 15px; overflow: hidden; border-radius: 10px; margin: 25px 0 22px; background: #edf1f3; }
+    .source-bar span { min-width: 3px; }
+    .source-list { display: grid; gap: 11px; }
+    .source-row { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 8px; align-items: center; }
+    .source-meta { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; }
+    .source-row .count { font-weight: 800; }
+    .source-row .share { width: 44px; text-align: right; color: var(--muted); }
+    .attention { padding: 20px; }
+    .attention-list { margin-top: 15px; display: grid; gap: 10px; }
+    .attention-item { border-left: 3px solid var(--orange); background: #fbfaf6; border-radius: 0 10px 10px 0; padding: 11px 12px; }
+    .attention-item strong { display: block; font-size: 12px; margin-bottom: 4px; }
+    .attention-item span { color: var(--muted); font-size: 11px; line-height: 1.35; }
+    .abc-card { padding: 20px; }
+    .abc-list { display: grid; gap: 12px; margin-top: 17px; }
+    .abc-row { display: grid; grid-template-columns: 48px 52px 1fr 52px; gap: 10px; align-items: center; font-size: 11px; }
+    .abc-total { color: var(--muted); text-align: right; }
+    .abc-track { height: 7px; background: #edf1f3; border-radius: 7px; overflow: hidden; }
+    .abc-track span { display: block; height: 100%; border-radius: inherit; background: var(--teal); }
+    .abc-row.low .abc-track span { background: var(--orange); }
+    .abc-rate { text-align: right; font-weight: 800; }
+    .view-panel[hidden] { display: none; }
+    .planner-card { padding: 20px; }
+    .planner-grid { display: grid; grid-template-columns: 140px 1fr 110px; gap: 12px; align-items: center; margin-top: 17px; }
+    .planner-grid + .planner-grid { margin-top: 13px; }
+    .planner-track { height: 12px; display: flex; border-radius: 8px; overflow: hidden; background: #edf1f3; }
+    .planner-track .with { background: var(--orange); }
+    .planner-track .without { background: #cad8dd; }
+    .planner-values { text-align: right; font-size: 10px; color: var(--muted); }
+    .planner-values strong { display: block; color: var(--ink); font-size: 12px; }
+    .breakdown-panel { padding: 0; overflow: hidden; }
+    .breakdown-head { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 22px 24px 18px; }
+    .period-selector { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 24px; border-top: 1px solid var(--line); background: #fbfcfc; }
+    .period-selector small { display: block; margin-top: 3px; color: var(--muted); }
+    .period-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+    .period-button { border: 1px solid #cdd9de; border-radius: 999px; padding: 7px 12px; background: #fff; color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 800; }
+    .period-button.active { border-color: var(--teal); background: var(--teal-soft); color: var(--teal); }
+    .breakdown-filters { display: grid; grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(150px, .7fr)); gap: 9px; padding: 15px 24px; background: #f7f9f9; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .filter-control { width: 100%; border: 1px solid #cdd9de; border-radius: 8px; padding: 9px 11px; background: #fff; color: var(--ink); }
+    .breakdown-summary { display: flex; gap: 22px; align-items: center; padding: 13px 24px; color: var(--muted); font-size: 11px; }
+    .breakdown-summary strong { color: var(--ink); }
+    .table-scroll { width: 100%; max-width: 100%; overflow: auto; }
+    .simple-table { width: 100%; min-width: 1120px; border-collapse: collapse; }
+    .simple-table th, .simple-table td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+    .simple-table th { color: var(--muted); background: #f3f6f6; font-size: 10px; text-transform: uppercase; letter-spacing: .6px; }
+    .simple-table tbody tr:hover { background: #f1f8f7; }
+    .part-period-heading, .part-period-cell { min-width: 220px; }
+    .part-period-cell strong { display: block; font-size: 11px; line-height: 1.3; }
+    .part-period-cell small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.3; }
+    .metric-heading, .metric-cell { min-width: 112px; text-align: center !important; }
+    .metric-cell { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .missing-period { color: #9babb3; }
+    .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; background: var(--teal); }
+    .status-dot.exception { background: var(--orange); }
+    .table-footer { display: flex; justify-content: space-between; padding: 13px 24px; color: var(--muted); font-size: 11px; }
+    .pagination { display: flex; align-items: center; gap: 8px; }
+    .page-button { border: 1px solid #cdd9de; border-radius: 7px; padding: 6px 10px; background: #fff; color: var(--ink); cursor: pointer; font-weight: 700; }
+    .page-button:disabled { cursor: default; opacity: .4; }
+    @media (max-width: 1200px) { .dashboard { grid-template-columns: 1fr; } .side-column { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 900px) { .metrics { grid-template-columns: 1fr 1fr; } .composition { grid-template-columns: 1fr; } .breakdown-filters { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 680px) { .hero, .control-row { align-items: flex-start; flex-direction: column; min-width: 0; } .hero > div:first-child { width: 100%; } .hero > div, .control-row > *, .card-title > * { max-width: 100%; min-width: 0; } .lead { width: 100%; max-width: 100%; } .metrics, .side-column { grid-template-columns: 1fr; } .hero-actions { width: 100%; } .trend-card { min-width: 0; overflow: hidden; } .trend-card .card-title { flex-direction: column; } .chart-legend { width: 100%; } .status-chart { width: 100%; max-width: 100%; overflow-x: auto; } .bar-plot { min-width: 310px; gap: 8px; padding: 0; } .bar-group { width: 43px; } .stacked-bar { width: 28px; } .planner-grid { grid-template-columns: 100px 1fr; } .planner-values { grid-column: 2; } .breakdown-head, .period-selector { flex-direction: column; align-items: stretch; } .period-buttons { justify-content: flex-start; } .breakdown-head .button { align-self: flex-start; } .breakdown-filters { grid-template-columns: 1fr; } .table-footer { flex-direction: column; gap: 9px; } .pagination { flex-wrap: wrap; } }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">AF</div><div class="brand-name">Demand Planning</div></div>
+      <div class="current-section">Audit Center</div>
+      <div class="user">Sharon</div>
+    </header>
+
+    <main class="page">
+      <section class="hero reveal">
+        <div>
+          <div class="eyebrow">Monthly governance / Executive view</div>
+          <h1>Demand Planning Audit Pulse</h1>
+          <p class="lead">One monthly view of reconciliation health, planner intervention, forecast-source behavior, and the parts that need attention.</p>
+        </div>
+        <div class="hero-actions"><button class="button primary" id="exportKpi">Export report</button></div>
+      </section>
+
+      <section class="control-deck card reveal delay-1">
+        <div class="control-row">
+          <div class="month-strip" id="monthStrip" aria-label="Audit month"></div>
+          <div class="compare"><span class="compare-dot"></span><span id="comparisonText"></span></div>
+        </div>
+        <div class="tabs">
+          <button class="tab active" data-view="kpi">KPI Overview</button>
+          <button class="tab" data-view="parts">Part-Level Breakdown</button>
+        </div>
+      </section>
+
+      <section class="view-panel" id="kpiView">
+        <div class="dashboard">
+          <div class="main-column">
+            <div class="metrics reveal delay-1">
+              <article class="metric card"><div class="metric-label">Audited items</div><div class="metric-value" id="totalValue"></div><div class="metric-foot"><span class="delta" id="totalDelta"></span><span id="totalDeltaText"></span></div></article>
+              <article class="metric card"><div class="metric-label">Reconciled</div><div class="metric-value" id="reconciledValue"></div><div class="metric-foot"><span class="delta" id="recDelta"></span><span id="recDeltaText"></span></div></article>
+              <article class="metric card"><div class="metric-label">Exceptions</div><div class="metric-value" id="exceptionValue"></div><div class="metric-foot"><span class="delta down" id="exceptionRate"></span> require monitoring</div></article>
+              <article class="metric card"><div class="metric-label">Planner overrides</div><div class="metric-value" id="overrideValue"></div><div class="metric-foot"><span class="delta" id="overrideRate"></span> of audited items</div></article>
+            </div>
+
+            <article class="trend-card card reveal delay-2">
+              <div class="card-title">
+                <div><h2>Monthly status mix</h2><div class="caption">Reconciled and exception share across audit cycles</div></div>
+                <div class="chart-legend">
+                  <span><i class="legend-box" style="background:#0b7f82"></i>Reconciled</span>
+                  <span><i class="legend-box" style="background:#dce5e8"></i>Exceptions</span>
+                </div>
+              </div>
+              <div class="status-chart" id="statusChart" role="img" aria-label="Monthly reconciled and exception percentages">
+                <div class="y-axis"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
+                <div class="bar-plot" id="monthlyBars"></div>
+              </div>
+            </article>
+
+            <div class="composition reveal delay-3">
+              <article class="card">
+                <div class="card-title"><div><h3>Reconciliation method</h3><div class="caption">How reconciled items were resolved</div></div><span class="pill teal" id="reconciliationTotal"></span></div>
+                <div class="donut-wrap">
+                  <div class="donut" id="reconciliationDonut"><div class="donut-center"><strong id="automaticRate"></strong><span>automatic</span></div></div>
+                  <div class="legend-list">
+                    <div class="legend-row"><span class="swatch" style="background:#0b7f82"></span><span>Automatically reconciled</span><strong id="automaticCount"></strong></div>
+                    <div class="legend-row"><span class="swatch" style="background:#df8a2f"></span><span>Manually reconciled</span><strong id="manualCount"></strong></div>
+                  </div>
+                </div>
+              </article>
+              <article class="card">
+                <div class="card-title"><div><h3>Forecast source mix</h3><div class="caption">Effective source classification</div></div><span class="pill gray">All items</span></div>
+                <div class="source-bar" id="sourceBar"></div><div class="source-list" id="sourceList"></div>
+              </article>
+            </div>
+
+            <article class="planner-card card reveal delay-3">
+              <div class="card-title">
+                <div><h2>Planner intervention by status</h2><div class="caption">Items with adjusted forecast or blend-weight overrides</div></div>
+                <span class="pill orange" id="overridePill"></span>
+              </div>
+              <div class="planner-grid">
+                <strong>Reconciled</strong>
+                <div class="planner-track" id="reconciledPlannerTrack"><span class="with"></span><span class="without"></span></div>
+                <div class="planner-values" id="reconciledPlannerValues"></div>
+              </div>
+              <div class="planner-grid">
+                <strong>Exceptions</strong>
+                <div class="planner-track" id="exceptionPlannerTrack"><span class="with"></span><span class="without"></span></div>
+                <div class="planner-values" id="exceptionPlannerValues"></div>
+              </div>
+            </article>
+          </div>
+
+          <aside class="side-column">
+            <article class="attention card reveal delay-2">
+              <div class="card-title"><div><h2>What changed</h2><div class="caption">Signals worth reviewing this month</div></div><span class="pill orange">3 insights</span></div>
+              <div class="attention-list" id="attentionList"></div>
+            </article>
+
+            <article class="abc-card card reveal delay-3">
+              <div class="card-title"><div><h2>ABC class health</h2><div class="caption">Item count and reconciliation rate by priority class</div></div><span class="pill gray" id="abcMonth"></span></div>
+              <div class="abc-list" id="abcList"></div>
+            </article>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view-panel card breakdown-panel" id="partsView" hidden>
+        <div class="breakdown-head">
+          <div><h2>Part-Level Breakdown</h2><div class="caption">Compare selected audit periods and review each item's six-month activity.</div></div>
+          <button class="button primary" id="exportParts">Export filtered rows</button>
+        </div>
+        <div class="period-selector">
+          <div><strong>Report periods</strong><small>Select one, multiple, or all available months.</small></div>
+          <div class="period-buttons" id="partPeriodButtons" aria-label="Part-Level report periods"></div>
+        </div>
+        <div class="breakdown-filters">
+          <input class="filter-control" id="partSearch" type="search" placeholder="Search item or description" aria-label="Search item or description">
+          <select class="filter-control" id="statusFilter" aria-label="Filter by status"><option value="">All statuses</option></select>
+          <select class="filter-control" id="sourceFilter" aria-label="Filter by forecast source"><option value="">All forecast sources</option></select>
+          <select class="filter-control" id="classFilter" aria-label="Filter by ABC class"><option value="">All ABC classes</option></select>
+        </div>
+        <div class="breakdown-summary"><span><strong id="partCount">0</strong> matching items</span><span>Periods: <strong id="partAuditMonth"></strong></span><span id="sixMonthSummary"></span></div>
+        <div class="table-scroll">
+          <table class="simple-table" id="partTable">
+            <thead><tr id="partTableHead"></tr></thead>
+            <tbody id="simpleParts"></tbody>
+          </table>
+        </div>
+        <div class="table-footer"><span id="partRange"></span><div class="pagination"><button class="page-button" id="previousPage">Previous</button><strong id="partPage"></strong><button class="page-button" id="nextPage">Next</button></div></div>
+      </section>
+    </main>
+  </div>
+  <script src="audit-data.js"></script>
+  <script>
+    const data = window.auditDashboardData;
+    const fmt = new Intl.NumberFormat("en-US");
+    const PAGE_SIZE = 50;
+    const PART = { ITEM: 0, DESCRIPTION: 1, ABC: 2, STATUS: 3, SOURCE: 4, OVERRIDE: 5 };
+    const AUTOMATIC_STATUS = "Automatically Reconciled";
+    const metricMonths = data.months.slice(-6);
+    const state = {
+      monthIndex: data.months.length - 1,
+      page: 1,
+      filteredParts: [],
+      reportRows: [],
+      selectedPartMonthKeys: new Set([data.months.at(-1).key])
+    };
+    const monthStrip = document.getElementById("monthStrip");
+    const partPeriodButtons = document.getElementById("partPeriodButtons");
+    const statusFilter = document.getElementById("statusFilter");
+    const sourceFilter = document.getElementById("sourceFilter");
+    const classFilter = document.getElementById("classFilter");
+
+    const htmlEntities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+    const escapeHtml = value => String(value).replace(/[&<>"']/g, character => htmlEntities[character]);
+    const rateOf = (value, total) => total ? value / total * 100 : 0;
+    const signed = value => `${value >= 0 ? "+" : ""}${value}`;
+
+    function selectedMonth() {
+      return data.months[state.monthIndex];
+    }
+
+    function selectedPartMonths() {
+      return data.months.filter(month => state.selectedPartMonthKeys.has(month.key));
+    }
+
+    function isManuallyAccepted(part) {
+      return part[PART.STATUS].startsWith("Accepted with");
+    }
+
+    function buildSixMonthMetrics() {
+      const metrics = new Map();
+      metricMonths.forEach(month => {
+        (data.partsByMonth[month.key] || []).forEach(part => {
+          const itemMetrics = metrics.get(part[PART.ITEM]) || { automatic: 0, adjusted: 0, manuallyAccepted: 0 };
+          itemMetrics.automatic += part[PART.STATUS] === AUTOMATIC_STATUS ? 1 : 0;
+          itemMetrics.adjusted += part[PART.OVERRIDE] ? 1 : 0;
+          itemMetrics.manuallyAccepted += isManuallyAccepted(part) ? 1 : 0;
+          metrics.set(part[PART.ITEM], itemMetrics);
+        });
+      });
+      return metrics;
+    }
+
+    const sixMonthMetrics = buildSixMonthMetrics();
+
+    function buildMonthStrip() {
+      data.months.forEach((month, index) => {
+        const button = document.createElement("button");
+        button.className = "month";
+        button.dataset.index = index;
+        button.innerHTML = `<span>${escapeHtml(month.label)}</span><small>${escapeHtml(month.year)}</small>`;
+        button.addEventListener("click", () => selectMonth(index));
+        monthStrip.appendChild(button);
+      });
+    }
+
+    function buildPartPeriodButtons() {
+      const options = [
+        { key: "all", label: "All months" },
+        ...data.months.map(month => ({ key: month.key, label: `${month.label} ${month.year}` }))
+      ];
+      partPeriodButtons.innerHTML = options.map(option =>
+        `<button class="period-button" type="button" data-period="${option.key}">${escapeHtml(option.label)}</button>`
+      ).join("");
+      partPeriodButtons.addEventListener("click", event => {
+        const button = event.target.closest("[data-period]");
+        if (!button) return;
+        updatePartPeriodSelection(button.dataset.period);
+      });
+    }
+
+    function updatePartPeriodSelection(periodKey) {
+      if (periodKey === "all") {
+        state.selectedPartMonthKeys = new Set(data.months.map(month => month.key));
+      } else if (state.selectedPartMonthKeys.size === data.months.length) {
+        state.selectedPartMonthKeys = new Set([periodKey]);
+      } else if (state.selectedPartMonthKeys.has(periodKey)) {
+        if (state.selectedPartMonthKeys.size > 1) state.selectedPartMonthKeys.delete(periodKey);
+      } else {
+        state.selectedPartMonthKeys.add(periodKey);
+      }
+      refreshPartReport();
+    }
+
+    function renderPartPeriodButtons() {
+      const allSelected = state.selectedPartMonthKeys.size === data.months.length;
+      partPeriodButtons.querySelectorAll("[data-period]").forEach(button => {
+        const key = button.dataset.period;
+        button.classList.toggle("active", key === "all" ? allSelected : state.selectedPartMonthKeys.has(key));
+        button.setAttribute("aria-pressed", button.classList.contains("active"));
+      });
+    }
+
+    function renderMonthlyBars() {
+      const barContainer = document.getElementById("monthlyBars");
+      barContainer.innerHTML = data.months.map((month, index) => {
+        const reconciledRate = rateOf(month.reconciled, month.total);
+        const exceptionRate = 100 - reconciledRate;
+        return `
+          <div class="bar-group ${index === state.monthIndex ? "current" : ""}">
+            <span class="bar-rate">${reconciledRate.toFixed(1)}%</span>
+            <div class="stacked-bar" title="${escapeHtml(month.label)}: ${fmt.format(month.reconciled)} reconciled, ${fmt.format(month.exceptions)} exceptions">
+              <span class="bar-segment exceptions" style="height:${exceptionRate}%"></span>
+              <span class="bar-segment reconciled" style="height:${reconciledRate}%"></span>
+            </div>
+            <span class="bar-label">${escapeHtml(month.label)}</span>
+          </div>`;
+      }).join("");
+      document.getElementById("statusChart").setAttribute(
+        "aria-label",
+        `Monthly reconciled and exception percentages from ${data.months[0].label} through ${data.months.at(-1).label} ${data.months.at(-1).year}`
+      );
+    }
+
+    function renderSummary(month, previous) {
+      const reconciledRate = rateOf(month.reconciled, month.total);
+      const exceptionRate = rateOf(month.exceptions, month.total);
+      const overrideRate = rateOf(month.overrides, month.total);
+      const totalDelta = previous ? month.total - previous.total : 0;
+      document.getElementById("totalValue").textContent = fmt.format(month.total);
+      document.getElementById("totalDelta").textContent = previous ? signed(totalDelta) : "Baseline";
+      document.getElementById("totalDeltaText").textContent = previous ? "since previous month" : "first audit month";
+      document.getElementById("reconciledValue").textContent = fmt.format(month.reconciled);
+      document.getElementById("recDelta").textContent = `${reconciledRate.toFixed(1)}%`;
+      document.getElementById("recDelta").className = "delta";
+      document.getElementById("recDeltaText").textContent = "of audited items";
+      document.getElementById("exceptionValue").textContent = fmt.format(month.exceptions);
+      document.getElementById("exceptionRate").textContent = `${exceptionRate.toFixed(1)}%`;
+      document.getElementById("overrideValue").textContent = fmt.format(month.overrides);
+      document.getElementById("overrideRate").textContent = `${overrideRate.toFixed(1)}%`;
+      document.getElementById("comparisonText").textContent = previous
+        ? `Compared with ${previous.label} ${previous.year}`
+        : "First available audit month";
+    }
+
+    function renderReconciliation(month) {
+      const automaticRate = rateOf(month.automatic, month.reconciled);
+      document.getElementById("reconciliationTotal").textContent = `${fmt.format(month.reconciled)} total`;
+      document.getElementById("automaticRate").textContent = `${automaticRate.toFixed(1)}%`;
+      document.getElementById("automaticCount").textContent = fmt.format(month.automatic);
+      document.getElementById("manualCount").textContent = fmt.format(month.manual);
+      document.getElementById("reconciliationDonut").style.background =
+        `conic-gradient(var(--teal) 0 ${automaticRate}%, var(--orange) ${automaticRate}% 100%)`;
+    }
+
+    function renderSources(month) {
+      const sourceBar = document.getElementById("sourceBar");
+      const sourceList = document.getElementById("sourceList");
+      sourceBar.innerHTML = "";
+      sourceList.innerHTML = "";
+
+      month.sources.forEach(source => {
+        if (source.count > 0) {
+          const segment = document.createElement("span");
+          segment.style.width = `${rateOf(source.count, month.total)}%`;
+          segment.style.background = source.color;
+          sourceBar.appendChild(segment);
+        }
+        sourceList.insertAdjacentHTML("beforeend", `
+          <div class="source-row">
+            <span class="swatch" style="background:${source.color}"></span>
+            <span>${escapeHtml(source.label)}<small class="source-meta">${fmt.format(source.exceptions)} exceptions / ${fmt.format(source.reconciled)} reconciled</small></span>
+            <span class="count">${fmt.format(source.count)}</span>
+            <span class="share">${rateOf(source.count, month.total).toFixed(1)}%</span>
+          </div>`);
+      });
+    }
+
+    function renderPlannerRow(prefix, values) {
+      const total = values.withOverrides + values.withoutOverrides;
+      const withRate = rateOf(values.withOverrides, total);
+      const track = document.getElementById(`${prefix}PlannerTrack`);
+      track.querySelector(".with").style.width = `${withRate}%`;
+      track.querySelector(".without").style.width = `${100 - withRate}%`;
+      track.setAttribute(
+        "aria-label",
+        `${fmt.format(values.withOverrides)} items with overrides and ${fmt.format(values.withoutOverrides)} without overrides`
+      );
+      document.getElementById(`${prefix}PlannerValues`).innerHTML =
+        `<strong>${fmt.format(values.withOverrides)} with</strong>${fmt.format(values.withoutOverrides)} without`;
+    }
+
+    function renderPlanner(month) {
+      document.getElementById("overridePill").textContent = `${fmt.format(month.overrides)} overrides`;
+      renderPlannerRow("reconciled", month.planner.reconciled);
+      renderPlannerRow("exception", month.planner.exceptions);
+    }
+
+    function renderInsights(month, previous) {
+      const reconciliationRate = rateOf(month.reconciled, month.total);
+      const previousRate = previous ? rateOf(previous.reconciled, previous.total) : reconciliationRate;
+      const delta = reconciliationRate - previousRate;
+      const topSource = [...month.sources].sort((left, right) => right.count - left.count)[0];
+      const lowestClasses = [...month.abc]
+        .filter(row => row.total > 0)
+        .sort((left, right) => rateOf(left.reconciled, left.total) - rateOf(right.reconciled, right.total))
+        .slice(0, 2);
+      const classNames = lowestClasses.map(row => row.label).join(" and ");
+      const direction = delta >= 0 ? "rose" : "fell";
+      const attentionList = document.getElementById("attentionList");
+
+      attentionList.innerHTML = `
+        <div class="attention-item">
+          <strong>${previous ? `Reconciliation rate ${direction} ${Math.abs(delta).toFixed(1)} points` : "Baseline reconciliation rate established"}</strong>
+          <span>${month.label} closed at ${reconciliationRate.toFixed(1)}%${previous ? `, ${direction === "rose" ? "up" : "down"} from ${previousRate.toFixed(1)}% in ${previous.label}` : " for the first available audit month"}.</span>
+        </div>
+        <div class="attention-item">
+          <strong>${escapeHtml(topSource.label)} is the largest source group</strong>
+          <span>${fmt.format(topSource.count)} items, or ${rateOf(topSource.count, month.total).toFixed(1)}%, use this source classification.</span>
+        </div>
+        <div class="attention-item">
+          <strong>${escapeHtml(classNames)} have the lowest reconciliation rates</strong>
+          <span>Review these classes first when prioritizing exception reduction.</span>
+        </div>`;
+    }
+
+    function renderAbc(month) {
+      document.getElementById("abcMonth").textContent = month.label;
+      document.getElementById("abcList").innerHTML = month.abc.map(row => {
+        const rate = rateOf(row.reconciled, row.total);
+        return `<div class="abc-row ${rate < 50 ? "low" : ""}">
+          <strong>${escapeHtml(row.label)}</strong>
+          <span class="abc-total">${fmt.format(row.total)}</span>
+          <div class="abc-track"><span style="width:${rate}%"></span></div>
+          <span class="abc-rate">${rate.toFixed(rate < 10 ? 1 : 0)}%</span>
+        </div>`;
+      }).join("");
+    }
+
+    function setFilterOptions(select, firstLabel, values) {
+      const previousValue = select.value;
+      select.replaceChildren(new Option(firstLabel, ""));
+      values.forEach(value => select.add(new Option(value, value)));
+      select.value = values.includes(previousValue) ? previousValue : "";
+    }
+
+    function aggregateSelectedParts() {
+      const items = new Map();
+      selectedPartMonths().forEach(month => {
+        (data.partsByMonth[month.key] || []).forEach(part => {
+          const item = items.get(part[PART.ITEM]) || {
+            item: part[PART.ITEM],
+            description: part[PART.DESCRIPTION],
+            abc: part[PART.ABC],
+            periods: {}
+          };
+          item.description = part[PART.DESCRIPTION];
+          item.abc = part[PART.ABC];
+          item.periods[month.key] = part;
+          items.set(item.item, item);
+        });
+      });
+      return [...items.values()];
+    }
+
+    function formatMonthRange(months) {
+      if (months.length === 1) return `${months[0].label} ${months[0].year}`;
+      const first = months[0];
+      const last = months.at(-1);
+      return first.year === last.year
+        ? `${first.label}-${last.label} ${last.year}`
+        : `${first.label} ${first.year}-${last.label} ${last.year}`;
+    }
+
+    function refreshPartFilters() {
+      state.reportRows = aggregateSelectedParts();
+      const periodRows = state.reportRows.flatMap(item => Object.values(item.periods));
+      setFilterOptions(statusFilter, "All statuses", [...new Set(periodRows.map(part => part[PART.STATUS]))].sort());
+      setFilterOptions(sourceFilter, "All forecast sources", [...new Set(periodRows.map(part => part[PART.SOURCE]))].sort());
+      setFilterOptions(classFilter, "All ABC classes", [...new Set(state.reportRows.map(item => item.abc))].sort());
+    }
+
+    function renderPartHeader(months) {
+      document.getElementById("partTableHead").innerHTML = [
+        "<th>Item</th>",
+        "<th>Description</th>",
+        "<th>ABC class</th>",
+        ...months.map(month => `<th class="part-period-heading">${escapeHtml(month.label)} ${escapeHtml(month.year)}<br>Status / forecast source</th>`),
+        "<th class=\"metric-heading\" title=\"Count within the latest six available audit months\">Auto reconciled<br>Last 6 months</th>",
+        "<th class=\"metric-heading\" title=\"Count of periods with a user override within the latest six available audit months\">Adjusted<br>Last 6 months</th>",
+        "<th class=\"metric-heading\" title=\"Count of manually accepted periods within the latest six available audit months\">Manually accepted<br>Last 6 months</th>"
+      ].join("");
+      document.getElementById("partTable").style.minWidth = `${720 + months.length * 220}px`;
+    }
+
+    function renderParts() {
+      const months = selectedPartMonths();
+      const search = document.getElementById("partSearch").value.trim().toLowerCase();
+      const status = statusFilter.value;
+      const source = sourceFilter.value;
+      const abc = classFilter.value;
+      const matches = state.reportRows.filter(item => {
+        const periodRows = Object.values(item.periods);
+        const matchesSearch = !search || `${item.item} ${item.description}`.toLowerCase().includes(search);
+        return matchesSearch
+          && (!status || periodRows.some(part => part[PART.STATUS] === status))
+          && (!source || periodRows.some(part => part[PART.SOURCE] === source))
+          && (!abc || item.abc === abc);
+      });
+      state.filteredParts = matches;
+
+      const totalPages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
+      state.page = Math.min(state.page, totalPages);
+      const start = (state.page - 1) * PAGE_SIZE;
+      const visibleParts = matches.slice(start, start + PAGE_SIZE);
+
+      renderPartHeader(months);
+      document.getElementById("partCount").textContent = fmt.format(matches.length);
+      document.getElementById("simpleParts").innerHTML = visibleParts.length
+        ? visibleParts.map(item => {
+            const metrics = sixMonthMetrics.get(item.item) || { automatic: 0, adjusted: 0, manuallyAccepted: 0 };
+            const periodCells = months.map(month => {
+              const part = item.periods[month.key];
+              if (!part) return `<td class="part-period-cell missing-period">Not present</td>`;
+              const isException = part[PART.STATUS].includes("Exceptions");
+              return `<td class="part-period-cell"><strong><span class="status-dot ${isException ? "exception" : ""}"></span>${escapeHtml(part[PART.STATUS])}</strong><small>${escapeHtml(part[PART.SOURCE])}</small></td>`;
+            }).join("");
+            return `<tr>
+              <td><strong>${escapeHtml(item.item)}</strong></td>
+              <td>${escapeHtml(item.description)}</td>
+              <td>${escapeHtml(item.abc)}</td>
+              ${periodCells}
+              <td class="metric-cell">${metrics.automatic}</td>
+              <td class="metric-cell">${metrics.adjusted}</td>
+              <td class="metric-cell">${metrics.manuallyAccepted}</td>
+            </tr>`;
+          }).join("")
+        : `<tr><td colspan="${months.length + 6}">No parts match the selected filters.</td></tr>`;
+
+      const rangeStart = matches.length ? start + 1 : 0;
+      const rangeEnd = Math.min(start + PAGE_SIZE, matches.length);
+      document.getElementById("partRange").textContent = `Showing ${fmt.format(rangeStart)}-${fmt.format(rangeEnd)} of ${fmt.format(matches.length)} matching items`;
+      document.getElementById("partPage").textContent = `Page ${state.page} of ${totalPages}`;
+      document.getElementById("previousPage").disabled = state.page === 1;
+      document.getElementById("nextPage").disabled = state.page === totalPages;
+    }
+
+    function refreshPartReport() {
+      state.page = 1;
+      const months = selectedPartMonths();
+      renderPartPeriodButtons();
+      refreshPartFilters();
+      document.getElementById("partAuditMonth").textContent = state.selectedPartMonthKeys.size === data.months.length
+        ? `All available (${formatMonthRange(months)})`
+        : formatMonthRange(months);
+      document.getElementById("sixMonthSummary").textContent = `Six-month metrics use ${metricMonths.length} available periods (${formatMonthRange(metricMonths)}).`;
+      renderParts();
+    }
+
+    function selectMonth(index) {
+      state.monthIndex = index;
+      state.page = 1;
+      const month = selectedMonth();
+      const previous = index > 0 ? data.months[index - 1] : null;
+      document.querySelectorAll(".month").forEach((button, buttonIndex) => {
+        button.classList.toggle("active", buttonIndex === index);
+      });
+      document.querySelector(`.month[data-index="${index}"]`).scrollIntoView({ block: "nearest", inline: "center" });
+      state.selectedPartMonthKeys = new Set([month.key]);
+      renderSummary(month, previous);
+      renderMonthlyBars();
+      renderReconciliation(month);
+      renderSources(month);
+      renderPlanner(month);
+      renderInsights(month, previous);
+      renderAbc(month);
+      refreshPartReport();
+    }
+
+    function csvCell(value) {
+      const text = String(value ?? "");
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function downloadCsv(filename, rows) {
+      const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    function exportKpiReport() {
+      const month = selectedMonth();
+      const rows = [
+        ["Section", "Metric", "Exceptions", "Reconciled", "Total"],
+        ["Overall", "Total Items", month.exceptions, month.reconciled, month.total],
+        ["Reconciliation", "Automatically Reconciled", "", month.automatic, month.automatic],
+        ["Reconciliation", "Manually Reconciled", "", month.manual, month.manual],
+        ["Planner Overrides", "With User Overrides", month.planner.exceptions.withOverrides, month.planner.reconciled.withOverrides, month.overrides],
+        ...month.sources.map(source => ["Forecast Source", source.label, source.exceptions, source.reconciled, source.count]),
+        ...month.abc.map(row => ["ABC Class", row.label, row.exceptions, row.reconciled, row.total])
+      ];
+      downloadCsv(`audit-kpis-${month.key}.csv`, rows);
+    }
+
+    function exportPartRows() {
+      const months = selectedPartMonths();
+      const periodHeaders = months.flatMap(month => [
+        `${month.label} ${month.year} Status`,
+        `${month.label} ${month.year} Forecast Source`
+      ]);
+      const rows = [
+        [
+          "Item",
+          "Item Description",
+          "ABC Class",
+          ...periodHeaders,
+          "Automatically Reconciled (Last 6 Months)",
+          "Adjusted (Last 6 Months)",
+          "Manually Accepted (Last 6 Months)"
+        ],
+        ...state.filteredParts.map(item => {
+          const metrics = sixMonthMetrics.get(item.item) || { automatic: 0, adjusted: 0, manuallyAccepted: 0 };
+          const periodValues = months.flatMap(month => {
+            const part = item.periods[month.key];
+            return part ? [part[PART.STATUS], part[PART.SOURCE]] : ["", ""];
+          });
+          return [
+            item.item,
+            item.description,
+            item.abc,
+            ...periodValues,
+            metrics.automatic,
+            metrics.adjusted,
+            metrics.manuallyAccepted
+          ];
+        })
+      ];
+      const periodName = state.selectedPartMonthKeys.size === data.months.length
+        ? "all-months"
+        : months.map(month => month.key).join("_");
+      downloadCsv(`audit-parts-${periodName}.csv`, rows);
+    }
+
+    ["partSearch", "statusFilter", "sourceFilter", "classFilter"].forEach(id => {
+      document.getElementById(id).addEventListener("input", () => {
+        state.page = 1;
+        renderParts();
+      });
+    });
+    document.getElementById("previousPage").addEventListener("click", () => { state.page -= 1; renderParts(); });
+    document.getElementById("nextPage").addEventListener("click", () => { state.page += 1; renderParts(); });
+    document.getElementById("exportKpi").addEventListener("click", exportKpiReport);
+    document.getElementById("exportParts").addEventListener("click", exportPartRows);
+    document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(item => item.classList.remove("active")); tab.classList.add("active");
+      const isKpi = tab.dataset.view === "kpi";
+      document.getElementById("kpiView").hidden = !isKpi; document.getElementById("partsView").hidden = isKpi;
+    }));
+
+    buildMonthStrip();
+    buildPartPeriodButtons();
+    selectMonth(state.monthIndex);
+    if (location.hash === "#parts") {
+      document.querySelector('[data-view="parts"]').click();
+    }
+  </script>
+</body>
+</html>
