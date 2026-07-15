@@ -19,7 +19,7 @@ The Part-Level view supports:
 - Search, status/source/ABC filters, pagination, and CSV export
 - Per-item counts across the latest six available audit months for automatically reconciled, adjusted, and manually accepted periods
 
-`Adjusted` counts statuses containing `with user overrides`. `Manually accepted` counts both accepted statuses, with and without a user override, and excludes automatic reconciliation. This repository currently contains five audit months, so the six-month metrics use all five available months and will automatically expand to six when another workbook is added.
+`Adjusted` counts Part-Level statuses containing `with user overrides`. The source workbooks do not expose an independent override flag for rows classified as `Automatically Reconciled`, so those rows cannot be attributed as item-level adjustments. The aggregate Planner Overrides KPI remains the exact value from the KPI sheet. `Manually accepted` counts both accepted statuses, with and without a user override, and excludes automatic reconciliation. This repository currently contains five audit months, so the six-month metrics use all five available months and will automatically expand to six when another workbook is added.
 
 ## Open The Dashboard
 
@@ -35,10 +35,19 @@ python build_audit_data.py
 
 The generator requires `openpyxl`. It validates workbook totals before replacing `audit-data.js` and stops with an error if KPI totals do not reconcile with the Part-Level rows.
 
+Run the independent data and browser checks after refreshing the data:
+
+```powershell
+python validate_dashboard_data.py
+node validate_dashboard_ui.js
+```
+
 ## Files
 
 - `index.html`: GitHub Pages entry point, dashboard layout, and interactions
 - `shared.css`: dashboard styling
 - `audit-data.js`: generated KPI and Part-Level browser data
 - `build_audit_data.py`: workbook extraction and validation
+- `validate_dashboard_data.py`: independent Excel-to-dashboard data validation
+- `validate_dashboard_ui.js`: browser rendering, interaction, and export validation
 - `EMR - Audit Reports - *.xlsx`: source audit workbooks

@@ -536,7 +536,7 @@
         "<th>ABC class</th>",
         ...months.map(month => `<th class="part-period-heading">${escapeHtml(month.label)} ${escapeHtml(month.year)}<br>Status / forecast source</th>`),
         "<th class=\"metric-heading\" title=\"Count within the latest six available audit months\">Auto reconciled<br>Last 6 months</th>",
-        "<th class=\"metric-heading\" title=\"Count of periods with a user override within the latest six available audit months\">Adjusted<br>Last 6 months</th>",
+        "<th class=\"metric-heading\" title=\"Count of periods whose Part-Level status explicitly says with user overrides\">Adjusted<br>Last 6 months</th>",
         "<th class=\"metric-heading\" title=\"Count of manually accepted periods within the latest six available audit months\">Manually accepted<br>Last 6 months</th>"
       ].join("");
       document.getElementById("partTable").style.minWidth = `${720 + months.length * 220}px`;
@@ -602,7 +602,7 @@
       document.getElementById("partAuditMonth").textContent = state.selectedPartMonthKeys.size === data.months.length
         ? `All available (${formatMonthRange(months)})`
         : formatMonthRange(months);
-      document.getElementById("sixMonthSummary").textContent = `Six-month metrics use ${metricMonths.length} available periods (${formatMonthRange(metricMonths)}).`;
+      document.getElementById("sixMonthSummary").textContent = `Six-month metrics use ${metricMonths.length} available periods (${formatMonthRange(metricMonths)}). Adjusted counts explicit Part-Level override statuses.`;
       renderParts();
     }
 
