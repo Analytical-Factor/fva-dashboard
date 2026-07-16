@@ -130,19 +130,19 @@ async function main() {
     await page.waitForURL(loginUrl);
     assert(await page.locator("#loginForm").isVisible(), "Unauthenticated dashboard access did not redirect to login");
 
-    await page.locator("#username").fill("Sharon");
+    await page.locator("#username").fill("EMRuser");
     await page.locator("#password").fill("incorrect");
     await page.locator("#loginForm button[type=submit]").click();
     assert(await page.locator("#loginError").isVisible(), "Invalid credentials were not rejected");
     assert(page.url() === loginUrl, "Invalid credentials left the login page");
 
-    await page.locator("#username").fill("sharon");
-    await page.locator("#password").fill("AFUser123");
+    await page.locator("#username").fill("emruser");
+    await page.locator("#password").fill("EMRdashboard#2026!");
     await page.locator("#loginForm button[type=submit]").click();
     assert(await page.locator("#loginError").isVisible(), "Incorrect username casing was not rejected");
 
-    await page.locator("#username").fill("Sharon");
-    await page.locator("#password").fill("AFUser123");
+    await page.locator("#username").fill("EMRuser");
+    await page.locator("#password").fill("EMRdashboard#2026!");
     await page.locator("#loginForm button[type=submit]").click();
     await page.waitForURL(indexUrl);
     await page.waitForSelector("#monthStrip .month");
