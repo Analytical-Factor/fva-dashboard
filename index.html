@@ -25,6 +25,26 @@
     .month.active { color: #fff; background: var(--navy); box-shadow: 0 7px 14px rgba(10,53,83,.18); }
     .compare { display: flex; align-items: center; gap: 9px; white-space: nowrap; color: var(--muted); font-weight: 700; }
     .compare-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--orange); }
+    .kpi-filter-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 18px;
+      margin-bottom: 18px; padding: 14px 16px;
+    }
+    .kpi-filter-label { min-width: 180px; }
+    .kpi-filter-label strong { display: block; font-size: 12px; }
+    .kpi-filter-label span { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .kpi-class-options { display: flex; flex: 1; flex-wrap: wrap; gap: 6px; }
+    .kpi-class-chip {
+      border: 1px solid #cdd9de; border-radius: 999px; padding: 6px 10px;
+      background: #fff; color: var(--muted); cursor: pointer; font-size: 10px; font-weight: 800;
+    }
+    .kpi-class-chip:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
+    .kpi-class-chip.active { border-color: var(--teal); background: var(--teal-soft); color: var(--teal); }
+    .kpi-class-chip:disabled { cursor: not-allowed; opacity: .45; }
+    .kpi-filter-result {
+      min-width: 154px; padding-left: 16px; border-left: 1px solid var(--line);
+      color: var(--muted); font-size: 10px; line-height: 1.4; text-align: right;
+    }
+    .kpi-filter-result strong { display: block; color: var(--ink); font-size: 12px; }
     .dashboard { display: grid; grid-template-columns: minmax(0, 1.72fr) minmax(300px, .78fr); gap: 18px; min-width: 0; }
     .main-column, .side-column { display: grid; gap: 18px; min-width: 0; align-content: start; }
     .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
@@ -47,6 +67,11 @@
     .bar-segment.reconciled { background: var(--teal); }
     .bar-group.current .stacked-bar { box-shadow: 0 0 0 2px var(--orange); }
     .bar-group.current .bar-label { color: var(--orange); }
+    .bar-group.unavailable .stacked-bar {
+      background: repeating-linear-gradient(135deg, #edf1f3 0 7px, #dce5e8 7px 14px);
+      opacity: .65;
+    }
+    .bar-group.unavailable .bar-rate { color: #8a9ba4; }
     .bar-label { color: var(--muted); font-size: 11px; font-weight: 700; align-self: end; }
     .chart-legend { display: flex; gap: 18px; font-size: 11px; color: var(--muted); }
     .legend-box { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: middle; }
@@ -121,8 +146,8 @@
     .page-button { border: 1px solid #cdd9de; border-radius: 7px; padding: 6px 10px; background: #fff; color: var(--ink); cursor: pointer; font-weight: 700; }
     .page-button:disabled { cursor: default; opacity: .4; }
     @media (max-width: 1200px) { .dashboard { grid-template-columns: 1fr; } .side-column { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 900px) { .metrics { grid-template-columns: 1fr 1fr; } .composition { grid-template-columns: 1fr; } .breakdown-filters { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 680px) { .hero, .control-row { align-items: flex-start; flex-direction: column; min-width: 0; } .hero > div:first-child { width: 100%; } .hero > div, .control-row > *, .card-title > * { max-width: 100%; min-width: 0; } .lead { width: 100%; max-width: 100%; } .metrics, .side-column { grid-template-columns: 1fr; } .hero-actions { width: 100%; } .trend-card { min-width: 0; overflow: hidden; } .trend-card .card-title { flex-direction: column; } .chart-legend { width: 100%; } .status-chart { width: 100%; max-width: 100%; overflow-x: auto; } .bar-plot { min-width: 310px; gap: 8px; padding: 0; } .bar-group { width: 43px; } .stacked-bar { width: 28px; } .planner-grid { grid-template-columns: 100px 1fr; } .planner-values { grid-column: 2; } .breakdown-head, .period-selector { flex-direction: column; align-items: stretch; } .period-buttons { justify-content: flex-start; } .breakdown-head .button { align-self: flex-start; } .breakdown-filters { grid-template-columns: 1fr; } .table-footer { flex-direction: column; gap: 9px; } .pagination { flex-wrap: wrap; } }
+    @media (max-width: 900px) { .metrics { grid-template-columns: 1fr 1fr; } .composition { grid-template-columns: 1fr; } .breakdown-filters { grid-template-columns: 1fr 1fr; } .kpi-filter-bar { align-items: flex-start; flex-wrap: wrap; } .kpi-filter-result { border-left: 0; padding-left: 0; text-align: left; } }
+    @media (max-width: 680px) { .hero, .control-row { align-items: flex-start; flex-direction: column; min-width: 0; } .hero > div:first-child { width: 100%; } .hero > div, .control-row > *, .card-title > * { max-width: 100%; min-width: 0; } .lead { width: 100%; max-width: 100%; } .metrics, .side-column { grid-template-columns: 1fr; } .hero-actions { width: 100%; } .trend-card { min-width: 0; overflow: hidden; } .trend-card .card-title { flex-direction: column; } .chart-legend { width: 100%; } .status-chart { width: 100%; max-width: 100%; overflow-x: auto; } .bar-plot { min-width: 310px; gap: 8px; padding: 0; } .bar-group { width: 43px; } .stacked-bar { width: 28px; } .planner-grid { grid-template-columns: 100px 1fr; } .planner-values { grid-column: 2; } .breakdown-head, .period-selector { flex-direction: column; align-items: stretch; } .period-buttons { justify-content: flex-start; } .breakdown-head .button { align-self: flex-start; } .breakdown-filters { grid-template-columns: 1fr; } .table-footer { flex-direction: column; gap: 9px; } .pagination { flex-wrap: wrap; } .kpi-filter-bar { flex-direction: column; } .kpi-filter-label, .kpi-filter-result { min-width: 0; width: 100%; } }
   </style>
 </head>
 <body>
@@ -155,6 +180,14 @@
       </section>
 
       <section class="view-panel" id="kpiView">
+        <section class="kpi-filter-bar card reveal delay-1" aria-label="KPI ABC class filter">
+          <div class="kpi-filter-label">
+            <strong>ABC class scope</strong>
+            <span>Select one or more classes to recalculate every KPI.</span>
+          </div>
+          <div class="kpi-class-options" id="kpiClassOptions"></div>
+          <div class="kpi-filter-result" id="kpiFilterResult"></div>
+        </section>
         <div class="dashboard">
           <div class="main-column">
             <div class="metrics reveal delay-1">
@@ -190,7 +223,7 @@
                 </div>
               </article>
               <article class="card">
-                <div class="card-title"><div><h3>Forecast source mix</h3><div class="caption">Effective source classification</div></div><span class="pill gray">All items</span></div>
+                <div class="card-title"><div><h3>Forecast source mix</h3><div class="caption">Effective source classification</div></div><span class="pill gray" id="sourceScopePill">All items</span></div>
                 <div class="source-bar" id="sourceBar"></div><div class="source-list" id="sourceList"></div>
               </article>
             </div>
@@ -266,9 +299,11 @@
       page: 1,
       filteredParts: [],
       reportRows: [],
-      selectedPartMonthKeys: new Set([data.months.at(-1).key])
+      selectedPartMonthKeys: new Set([data.months.at(-1).key]),
+      selectedKpiAbcClasses: new Set()
     };
     const monthStrip = document.getElementById("monthStrip");
+    const kpiClassOptions = document.getElementById("kpiClassOptions");
     const partPeriodButtons = document.getElementById("partPeriodButtons");
     const statusFilter = document.getElementById("statusFilter");
     const sourceFilter = document.getElementById("sourceFilter");
@@ -281,6 +316,101 @@
 
     function selectedMonth() {
       return data.months[state.monthIndex];
+    }
+
+    function availableKpiClasses(month) {
+      return Object.keys(month.kpiByAbc || {}).sort((left, right) => left.localeCompare(right));
+    }
+
+    function aggregateKpiClasses(month) {
+      if (state.selectedKpiAbcClasses.size === 0) return month;
+      const scopes = [...state.selectedKpiAbcClasses]
+        .map(label => [label, month.kpiByAbc?.[label]])
+        .filter(([, scope]) => scope);
+      if (scopes.length !== state.selectedKpiAbcClasses.size) return null;
+
+      const sum = field => scopes.reduce((total, [, scope]) => total + scope[field], 0);
+      const planner = {
+        reconciled: {
+          withOverrides: scopes.reduce((total, [, scope]) => total + scope.planner.reconciled.withOverrides, 0),
+          withoutOverrides: scopes.reduce((total, [, scope]) => total + scope.planner.reconciled.withoutOverrides, 0)
+        },
+        exceptions: {
+          withOverrides: scopes.reduce((total, [, scope]) => total + scope.planner.exceptions.withOverrides, 0),
+          withoutOverrides: scopes.reduce((total, [, scope]) => total + scope.planner.exceptions.withoutOverrides, 0)
+        }
+      };
+      const sources = new Map();
+      scopes.forEach(([, scope]) => scope.sources.forEach(source => {
+        const aggregate = sources.get(source.label) || { ...source, exceptions: 0, reconciled: 0, count: 0 };
+        aggregate.exceptions += source.exceptions;
+        aggregate.reconciled += source.reconciled;
+        aggregate.count += source.count;
+        sources.set(source.label, aggregate);
+      }));
+
+      return {
+        ...month,
+        total: sum("total"),
+        reconciled: sum("reconciled"),
+        exceptions: sum("exceptions"),
+        automatic: sum("automatic"),
+        manual: sum("manual"),
+        planner,
+        overrides: planner.reconciled.withOverrides + planner.exceptions.withOverrides,
+        sources: [...sources.values()],
+        abc: scopes.map(([label, scope]) => ({
+          label,
+          total: scope.total,
+          reconciled: scope.reconciled,
+          exceptions: scope.exceptions
+        }))
+      };
+    }
+
+    function scopedMonthAt(index) {
+      if (index < 0 || index >= data.months.length) return null;
+      return aggregateKpiClasses(data.months[index]);
+    }
+
+    function selectedKpiScopeLabel() {
+      const classes = [...state.selectedKpiAbcClasses].sort((left, right) => left.localeCompare(right));
+      return classes.length ? classes.join(", ") : "All ABC classes";
+    }
+
+    function syncKpiClassSelection(month) {
+      const available = new Set(availableKpiClasses(month));
+      if ([...state.selectedKpiAbcClasses].some(label => !available.has(label))) {
+        state.selectedKpiAbcClasses.clear();
+      }
+    }
+
+    function renderKpiClassFilter(month) {
+      const available = availableKpiClasses(month);
+      const exactDataAvailable = available.length > 0;
+      const visibleLabels = exactDataAvailable
+        ? available
+        : month.abc.map(row => row.label);
+      const allActive = state.selectedKpiAbcClasses.size === 0;
+
+      kpiClassOptions.innerHTML = [
+        `<button class="kpi-class-chip ${allActive ? "active" : ""}" type="button" data-abc-class="all" ${exactDataAvailable ? "" : "disabled"}>All classes</button>`,
+        ...visibleLabels.map(label => `
+          <button
+            class="kpi-class-chip ${state.selectedKpiAbcClasses.has(label) ? "active" : ""}"
+            type="button"
+            data-abc-class="${escapeHtml(label)}"
+            ${exactDataAvailable ? "" : "disabled"}
+          >${escapeHtml(label)}</button>`)
+      ].join("");
+
+      const result = document.getElementById("kpiFilterResult");
+      if (!exactDataAvailable) {
+        result.innerHTML = `<strong>All ${fmt.format(month.total)} items</strong><span>Class KPI refresh pending for ${escapeHtml(month.label)} ${escapeHtml(month.year)}</span>`;
+        return;
+      }
+      const scopedMonth = aggregateKpiClasses(month);
+      result.innerHTML = `<strong>${fmt.format(scopedMonth.total)} audited items</strong><span>${escapeHtml(selectedKpiScopeLabel())}</span>`;
     }
 
     function selectedPartMonths() {
@@ -358,12 +488,21 @@
     function renderMonthlyBars() {
       const barContainer = document.getElementById("monthlyBars");
       barContainer.innerHTML = data.months.map((month, index) => {
-        const reconciledRate = rateOf(month.reconciled, month.total);
+        const scopedMonth = scopedMonthAt(index);
+        if (!scopedMonth) {
+          return `
+            <div class="bar-group unavailable ${index === state.monthIndex ? "current" : ""}" title="${escapeHtml(month.label)} class-level KPI data has not been refreshed">
+              <span class="bar-rate">N/A</span>
+              <div class="stacked-bar"></div>
+              <span class="bar-label">${escapeHtml(month.label)}</span>
+            </div>`;
+        }
+        const reconciledRate = rateOf(scopedMonth.reconciled, scopedMonth.total);
         const exceptionRate = 100 - reconciledRate;
         return `
           <div class="bar-group ${index === state.monthIndex ? "current" : ""}">
             <span class="bar-rate">${reconciledRate.toFixed(1)}%</span>
-            <div class="stacked-bar" title="${escapeHtml(month.label)}: ${fmt.format(month.reconciled)} reconciled, ${fmt.format(month.exceptions)} exceptions">
+            <div class="stacked-bar" title="${escapeHtml(month.label)}: ${fmt.format(scopedMonth.reconciled)} reconciled, ${fmt.format(scopedMonth.exceptions)} exceptions">
               <span class="bar-segment exceptions" style="height:${exceptionRate}%"></span>
               <span class="bar-segment reconciled" style="height:${reconciledRate}%"></span>
             </div>
@@ -372,7 +511,7 @@
       }).join("");
       document.getElementById("statusChart").setAttribute(
         "aria-label",
-        `Monthly reconciled and exception percentages from ${data.months[0].label} through ${data.months.at(-1).label} ${data.months.at(-1).year}`
+        `Monthly reconciled and exception percentages for ${selectedKpiScopeLabel()} from ${data.months[0].label} through ${data.months.at(-1).label} ${data.months.at(-1).year}`
       );
     }
 
@@ -383,7 +522,12 @@
       const totalDelta = previous ? month.total - previous.total : 0;
       document.getElementById("totalValue").textContent = fmt.format(month.total);
       document.getElementById("totalDelta").textContent = previous ? signed(totalDelta) : "Baseline";
-      document.getElementById("totalDeltaText").textContent = previous ? "since previous month" : "first audit month";
+      const priorClassDataPending = state.selectedKpiAbcClasses.size > 0
+        && state.monthIndex > 0
+        && !previous;
+      document.getElementById("totalDeltaText").textContent = previous
+        ? "since previous month"
+        : priorClassDataPending ? "prior class data pending" : "first audit month";
       document.getElementById("reconciledValue").textContent = fmt.format(month.reconciled);
       document.getElementById("recDelta").textContent = `${reconciledRate.toFixed(1)}%`;
       document.getElementById("recDelta").className = "delta";
@@ -394,7 +538,7 @@
       document.getElementById("overrideRate").textContent = `${overrideRate.toFixed(1)}%`;
       document.getElementById("comparisonText").textContent = previous
         ? `Compared with ${previous.label} ${previous.year}`
-        : "First available audit month";
+        : priorClassDataPending ? "Prior-month class data pending" : "First available audit month";
     }
 
     function renderReconciliation(month) {
@@ -412,6 +556,8 @@
       const sourceList = document.getElementById("sourceList");
       sourceBar.innerHTML = "";
       sourceList.innerHTML = "";
+      document.getElementById("sourceScopePill").textContent =
+        state.selectedKpiAbcClasses.size > 0 ? selectedKpiScopeLabel() : "All items";
 
       month.sources.forEach(source => {
         if (source.count > 0) {
@@ -460,6 +606,7 @@
         .sort((left, right) => rateOf(left.reconciled, left.total) - rateOf(right.reconciled, right.total))
         .slice(0, 2);
       const classNames = lowestClasses.map(row => row.label).join(" and ");
+      const classVerb = lowestClasses.length === 1 ? "has" : "have";
       const direction = delta >= 0 ? "rose" : "fell";
       const attentionList = document.getElementById("attentionList");
 
@@ -473,7 +620,7 @@
           <span>${fmt.format(topSource.count)} items, or ${rateOf(topSource.count, month.total).toFixed(1)}%, use this source classification.</span>
         </div>
         <div class="attention-item">
-          <strong>${escapeHtml(classNames)} have the lowest reconciliation rates</strong>
+          <strong>${escapeHtml(classNames)} ${classVerb} the lowest reconciliation rate${lowestClasses.length === 1 ? "" : "s"}</strong>
           <span>Review these classes first when prioritizing exception reduction.</span>
         </div>`;
     }
@@ -611,16 +758,9 @@
       renderParts();
     }
 
-    function selectMonth(index) {
-      state.monthIndex = index;
-      state.page = 1;
-      const month = selectedMonth();
-      const previous = index > 0 ? data.months[index - 1] : null;
-      document.querySelectorAll(".month").forEach((button, buttonIndex) => {
-        button.classList.toggle("active", buttonIndex === index);
-      });
-      document.querySelector(`.month[data-index="${index}"]`).scrollIntoView({ block: "nearest", inline: "center" });
-      state.selectedPartMonthKeys = new Set([month.key]);
+    function renderKpiDashboard() {
+      const month = scopedMonthAt(state.monthIndex) || selectedMonth();
+      const previous = scopedMonthAt(state.monthIndex - 1);
       renderSummary(month, previous);
       renderMonthlyBars();
       renderReconciliation(month);
@@ -628,6 +768,20 @@
       renderPlanner(month);
       renderInsights(month, previous);
       renderAbc(month);
+    }
+
+    function selectMonth(index) {
+      state.monthIndex = index;
+      state.page = 1;
+      const month = selectedMonth();
+      syncKpiClassSelection(month);
+      document.querySelectorAll(".month").forEach((button, buttonIndex) => {
+        button.classList.toggle("active", buttonIndex === index);
+      });
+      document.querySelector(`.month[data-index="${index}"]`).scrollIntoView({ block: "nearest", inline: "center" });
+      state.selectedPartMonthKeys = new Set([month.key]);
+      renderKpiClassFilter(month);
+      renderKpiDashboard();
       refreshPartReport();
     }
 
@@ -646,9 +800,11 @@
     }
 
     function exportKpiReport() {
-      const month = selectedMonth();
+      const month = scopedMonthAt(state.monthIndex) || selectedMonth();
+      const scope = selectedKpiScopeLabel();
       const rows = [
         ["Section", "Metric", "Exceptions", "Reconciled", "Total"],
+        ["Scope", "ABC Class", "", "", scope],
         ["Overall", "Total Items", month.exceptions, month.reconciled, month.total],
         ["Reconciliation", "Automatically Reconciled", "", month.automatic, month.automatic],
         ["Reconciliation", "Manually Reconciled", "", month.manual, month.manual],
@@ -656,7 +812,10 @@
         ...month.sources.map(source => ["Forecast Source", source.label, source.exceptions, source.reconciled, source.count]),
         ...month.abc.map(row => ["ABC Class", row.label, row.exceptions, row.reconciled, row.total])
       ];
-      downloadCsv(`audit-kpis-${month.key}.csv`, rows);
+      const scopeName = state.selectedKpiAbcClasses.size
+        ? [...state.selectedKpiAbcClasses].sort().join("-").replace(/[^a-z0-9-]+/gi, "_")
+        : "all-classes";
+      downloadCsv(`audit-kpis-${month.key}-${scopeName}.csv`, rows);
     }
 
     function exportPartRows() {
@@ -703,6 +862,20 @@
         state.page = 1;
         renderParts();
       });
+    });
+    kpiClassOptions.addEventListener("click", event => {
+      const button = event.target.closest("[data-abc-class]");
+      if (!button || button.disabled) return;
+      const abcClass = button.dataset.abcClass;
+      if (abcClass === "all") {
+        state.selectedKpiAbcClasses.clear();
+      } else if (state.selectedKpiAbcClasses.has(abcClass)) {
+        state.selectedKpiAbcClasses.delete(abcClass);
+      } else {
+        state.selectedKpiAbcClasses.add(abcClass);
+      }
+      renderKpiClassFilter(selectedMonth());
+      renderKpiDashboard();
     });
     document.getElementById("previousPage").addEventListener("click", () => { state.page -= 1; renderParts(); });
     document.getElementById("nextPage").addEventListener("click", () => { state.page += 1; renderParts(); });

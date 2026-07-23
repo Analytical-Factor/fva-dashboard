@@ -96,6 +96,61 @@ function aggregateParts() {
 }
 
 
+function aggregateClassKpis(month, labels) {
+  const scopes = labels.map((label) => month.kpiByAbc[label]);
+  const sum = (field) => scopes.reduce((total, scope) => total + scope[field], 0);
+  const sources = scopes[0].sources.map((source) => {
+    const matching = scopes.map((scope) => (
+      scope.sources.find((row) => row.label === source.label)
+    ));
+    return {
+      ...source,
+      exceptions: matching.reduce((total, row) => total + row.exceptions, 0),
+      reconciled: matching.reduce((total, row) => total + row.reconciled, 0),
+      count: matching.reduce((total, row) => total + row.count, 0),
+    };
+  });
+  const planner = {
+    reconciled: {
+      withOverrides: scopes.reduce(
+        (total, scope) => total + scope.planner.reconciled.withOverrides,
+        0
+      ),
+      withoutOverrides: scopes.reduce(
+        (total, scope) => total + scope.planner.reconciled.withoutOverrides,
+        0
+      ),
+    },
+    exceptions: {
+      withOverrides: scopes.reduce(
+        (total, scope) => total + scope.planner.exceptions.withOverrides,
+        0
+      ),
+      withoutOverrides: scopes.reduce(
+        (total, scope) => total + scope.planner.exceptions.withoutOverrides,
+        0
+      ),
+    },
+  };
+  return {
+    total: sum("total"),
+    reconciled: sum("reconciled"),
+    exceptions: sum("exceptions"),
+    automatic: sum("automatic"),
+    manual: sum("manual"),
+    planner,
+    overrides: planner.reconciled.withOverrides + planner.exceptions.withOverrides,
+    sources,
+    abc: labels.map((label) => ({
+      label,
+      total: month.kpiByAbc[label].total,
+      reconciled: month.kpiByAbc[label].reconciled,
+      exceptions: month.kpiByAbc[label].exceptions,
+    })),
+  };
+}
+
+
 async function saveDownload(page, selector, filename) {
   const downloadPromise = page.waitForEvent("download");
   await page.locator(selector).click();
@@ -196,6 +251,17 @@ async function main() {
           === JSON.stringify(month.abc.map((row) => numberFormat.format(row.total))),
         month.key + ": ABC totals mismatch"
       );
+      const classLabels = Object.keys(month.kpiByAbc || {});
+      const classButtons = page.locator("#kpiClassOptions .kpi-class-chip");
+      assert(
+        (await classButtons.count()) === (classLabels.length || month.abc.length) + 1,
+        month.key + ": ABC filter option count mismatch"
+      );
+      assert(
+        (await classButtons.evaluateAll((buttons) => buttons.every((button) => button.disabled)))
+          === (classLabels.length === 0),
+        month.key + ": ABC filter availability does not match exact class KPI data"
+      );
 
       const reconciledPlannerLabel =
         numberFormat.format(month.planner.reconciled.withOverrides)
@@ -225,6 +291,7 @@ async function main() {
       );
       const expectedKpiRows = [
         ["Section", "Metric", "Exceptions", "Reconciled", "Total"],
+        ["Scope", "ABC Class", "", "", "All ABC classes"],
         ["Overall", "Total Items", month.exceptions, month.reconciled, month.total],
         ["Reconciliation", "Automatically Reconciled", "", month.automatic, month.automatic],
         ["Reconciliation", "Manually Reconciled", "", month.manual, month.manual],
@@ -259,6 +326,124 @@ async function main() {
         month.key + ": KPI export content mismatch"
       );
     }
+
+    const filterableMonths = data.months
+      .map((month, index) => ({
+        month,
+        index,
+        classes: Object.keys(month.kpiByAbc || {}).sort((left, right) =>
+          left.localeCompare(right)
+        ),
+      }))
+      .filter(({ classes }) => classes.length > 1);
+    assert(filterableMonths.length > 0, "No month contains filterable ABC KPI classes");
+
+    for (const { month, index, classes } of filterableMonths) {
+      await page.locator('.month[data-index="' + index + '"]').click();
+      await page.locator('[data-abc-class="' + classes[0] + '"]').click();
+      const scopedMonth = aggregateClassKpis(month, classes.slice(0, 1));
+      assert(
+        (await page.locator("#totalValue").innerText()) === numberFormat.format(scopedMonth.total),
+        month.label + ": single-class audited item card mismatch"
+      );
+      assert(
+        (await page.locator("#reconciledValue").innerText())
+          === numberFormat.format(scopedMonth.reconciled),
+        month.label + ": single-class reconciled card mismatch"
+      );
+      assert(
+        (await page.locator("#exceptionValue").innerText())
+          === numberFormat.format(scopedMonth.exceptions),
+        month.label + ": single-class exception card mismatch"
+      );
+      assert(
+        (await page.locator("#overrideValue").innerText())
+          === numberFormat.format(scopedMonth.overrides),
+        month.label + ": single-class override card mismatch"
+      );
+      await page.locator('[data-abc-class="all"]').click();
+    }
+
+    const aprilIndex = data.months.findIndex((month) => month.key === "2026-04");
+    assert(aprilIndex >= 0, "April audit month is missing");
+    const april = data.months[aprilIndex];
+    const aprilClasses = Object.keys(april.kpiByAbc).sort((left, right) => left.localeCompare(right));
+    await page.locator('.month[data-index="' + aprilIndex + '"]').click();
+
+    const selectedClasses = aprilClasses.slice(0, 2);
+    await page.locator('[data-abc-class="' + selectedClasses[0] + '"]').click();
+    await page.locator('[data-abc-class="' + selectedClasses[1] + '"]').click();
+    const scopedApril = aggregateClassKpis(april, selectedClasses);
+    assert(
+      (await page.locator("#totalValue").innerText()) === numberFormat.format(scopedApril.total),
+      "April multi-class audited item card mismatch"
+    );
+    assert(
+      (await page.locator("#kpiFilterResult").innerText()).includes(
+        numberFormat.format(scopedApril.total)
+      ),
+      "April multi-class filter result mismatch"
+    );
+    assert(
+      (await page.locator("#monthlyBars .bar-group.unavailable").count())
+        === data.months.filter(
+          (month) => !selectedClasses.every((label) => month.kpiByAbc?.[label])
+        ).length,
+      "Filtered monthly chart did not mark unrefreshed months unavailable"
+    );
+
+    const filteredKpiRows = await saveDownload(
+      page,
+      "#exportKpi",
+      "audit-kpis-2026-04-filtered-validation.csv"
+    );
+    const expectedFilteredRows = [
+      ["Section", "Metric", "Exceptions", "Reconciled", "Total"],
+      ["Scope", "ABC Class", "", "", selectedClasses.join(", ")],
+      ["Overall", "Total Items", scopedApril.exceptions, scopedApril.reconciled, scopedApril.total],
+      [
+        "Reconciliation",
+        "Automatically Reconciled",
+        "",
+        scopedApril.automatic,
+        scopedApril.automatic,
+      ],
+      ["Reconciliation", "Manually Reconciled", "", scopedApril.manual, scopedApril.manual],
+      [
+        "Planner Overrides",
+        "With User Overrides",
+        scopedApril.planner.exceptions.withOverrides,
+        scopedApril.planner.reconciled.withOverrides,
+        scopedApril.overrides,
+      ],
+      ...scopedApril.sources.map((source) => [
+        "Forecast Source",
+        source.label,
+        source.exceptions,
+        source.reconciled,
+        source.count,
+      ]),
+      ...scopedApril.abc.map((row) => [
+        "ABC Class",
+        row.label,
+        row.exceptions,
+        row.reconciled,
+        row.total,
+      ]),
+    ].map((row) => row.map(String));
+    assert(
+      JSON.stringify(filteredKpiRows) === JSON.stringify(expectedFilteredRows),
+      "April filtered KPI export content mismatch\nActual: "
+        + JSON.stringify(filteredKpiRows)
+        + "\nExpected: "
+        + JSON.stringify(expectedFilteredRows)
+    );
+
+    await page.locator('[data-abc-class="all"]').click();
+    assert(
+      (await page.locator("#totalValue").innerText()) === numberFormat.format(april.total),
+      "All-classes reset did not restore April audited item count"
+    );
 
     await page.locator('[data-view="parts"]').click();
     await page.locator('[data-period="all"]').click();

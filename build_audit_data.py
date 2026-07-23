@@ -17,6 +17,28 @@ SOURCE_COLORS = {
     "100% Final Forecast": "#99a9b8",
     "No active blend weight": "#b55f62",
 }
+SOURCE_METRICS = {
+    "100% Hybrid Forecast": (
+        "Exceptions Items Driven 100% by Hybrid Forecast",
+        "Reconciled Items Driven 100% by Hybrid Forecast",
+    ),
+    "100% Final Forecast": (
+        "Exceptions Items Driven 100% by Final Forecast",
+        "Reconciled Items With 100% Final Forecast",
+    ),
+    "Mixed Forecast Source": (
+        "Exceptions Items With Mixed Forecast Source",
+        "Reconciled Items With Mixed Forecast Source",
+    ),
+    "Volume-adjusted / scaled blend": (
+        "Exceptions Items With Volume-Adjusted / Scaled Blend",
+        "Reconciled Items With Volume-Adjusted / Scaled Blend",
+    ),
+    "No active blend weight": (
+        "Exceptions Items With No Active Blend Weight",
+        "Reconciled Items With No Active Blend Weight",
+    ),
+}
 
 RECONCILED_STATUSES = {
     "Automatically Reconciled",
@@ -67,6 +89,96 @@ def parse_target_month(value: object) -> datetime:
     return datetime.strptime(str(value).strip(), "%b-%y")
 
 
+def build_scope_kpi(metrics: dict[str, object]) -> dict:
+    planner = {
+        "reconciled": {
+            "withOverrides": as_int(
+                metrics["Reconciled Items With Planner Adjusted Forecast"]
+            ),
+            "withoutOverrides": as_int(
+                metrics["Reconciled Items Without Planner Adjusted Forecast"]
+            ),
+        },
+        "exceptions": {
+            "withOverrides": as_int(
+                metrics["Exception Items With Planner Adjusted Forecast"]
+            ),
+            "withoutOverrides": as_int(
+                metrics["Exception Items Without Planner Adjusted Forecast"]
+            ),
+        },
+    }
+    sources = []
+    for label, (exception_metric, reconciled_metric) in SOURCE_METRICS.items():
+        exceptions = as_int(metrics[exception_metric])
+        reconciled = as_int(metrics[reconciled_metric])
+        sources.append(
+            {
+                "label": label,
+                "exceptions": exceptions,
+                "reconciled": reconciled,
+                "count": exceptions + reconciled,
+                "color": SOURCE_COLORS[label],
+            }
+        )
+
+    return {
+        "total": as_int(metrics["Total Items Count"]),
+        "reconciled": as_int(metrics["Total Combinations in Reconciled"]),
+        "exceptions": as_int(metrics["Total Items in Exceptions"]),
+        "automatic": as_int(metrics["Automatically Reconciled Items Count"]),
+        "manual": as_int(metrics["Manually Reconciled Items Count"]),
+        "planner": planner,
+        "overrides": (
+            planner["reconciled"]["withOverrides"]
+            + planner["exceptions"]["withOverrides"]
+        ),
+        "sources": sources,
+    }
+
+
+def load_class_kpis(workbook, target_month: datetime, filename: str) -> tuple[dict, dict]:
+    if "KPI by ABC Class" not in workbook.sheetnames:
+        return {}, {}
+
+    sheet = workbook["KPI by ABC Class"]
+    rows = list(sheet.iter_rows(values_only=True))
+    expected_header = (
+        "target_month",
+        "emr_abc_class",
+        "number",
+        "group",
+        "count",
+    )
+    if not rows or tuple(rows[0][:5]) != expected_header:
+        raise ValueError(f"{filename}: invalid KPI by ABC Class header")
+
+    scope_metrics: dict[str, dict[str, object]] = {}
+    sheet_months = set()
+    for row in rows[1:]:
+        if row[0] is None:
+            continue
+        sheet_months.add(parse_target_month(row[0]))
+        scope = str(row[1])
+        scope_metrics.setdefault(scope, {})[str(row[3])] = row[4]
+
+    if sheet_months != {target_month}:
+        raise ValueError(
+            f"{filename}: KPI by ABC Class target month {sheet_months} "
+            f"does not match {target_month:%b-%y}"
+        )
+    if "All ABC Classes" not in scope_metrics:
+        raise ValueError(f"{filename}: missing All ABC Classes KPI scope")
+
+    all_scope = build_scope_kpi(scope_metrics["All ABC Classes"])
+    class_kpis = {
+        scope: build_scope_kpi(metrics)
+        for scope, metrics in scope_metrics.items()
+        if scope != "All ABC Classes"
+    }
+    return all_scope, class_kpis
+
+
 def load_workbook_data(path: Path) -> tuple[dict, list[list]]:
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
@@ -109,6 +221,11 @@ def load_workbook_data(path: Path) -> tuple[dict, list[list]]:
             raise ValueError(f"{path.name}: expected one target month, found {target_months}")
 
         target_month = target_months.pop()
+        all_class_scope, class_kpis = load_class_kpis(
+            workbook,
+            target_month,
+            path.name,
+        )
         total = as_int(overall["Total Items"][1])
         reconciled = as_int(overall["Reconciled"][1])
         exceptions = as_int(overall["Exceptions"][1])
@@ -170,9 +287,11 @@ def load_workbook_data(path: Path) -> tuple[dict, list[list]]:
             ),
             "sources": sources,
             "abc": abc,
+            "kpiByAbc": class_kpis,
         }
 
         validate_month(path.name, month, parts)
+        validate_class_kpis(path.name, month, all_class_scope)
         return month, parts
     finally:
         workbook.close()
@@ -237,6 +356,67 @@ def validate_month(filename: str, month: dict, parts: list[list]) -> None:
         raise ValueError(f"{filename} validation failed: " + "; ".join(failures))
 
 
+def validate_class_kpis(filename: str, month: dict, all_scope: dict) -> None:
+    if not month["kpiByAbc"]:
+        return
+
+    aggregate_checks = {
+        "total": month["total"],
+        "reconciled": month["reconciled"],
+        "exceptions": month["exceptions"],
+        "automatic": month["automatic"],
+        "manual": month["manual"],
+        "overrides": month["overrides"],
+    }
+    failures = []
+    for field, expected in aggregate_checks.items():
+        if all_scope[field] != expected:
+            failures.append(
+                f"All ABC Classes {field}: query={all_scope[field]}, KPI={expected}"
+            )
+        class_sum = sum(scope[field] for scope in month["kpiByAbc"].values())
+        if class_sum != expected:
+            failures.append(
+                f"ABC class sum {field}: query={class_sum}, KPI={expected}"
+            )
+
+    all_sources = {source["label"]: source for source in all_scope["sources"]}
+    workbook_sources = {source["label"]: source for source in month["sources"]}
+    for label, source in all_sources.items():
+        workbook_source = workbook_sources.get(label)
+        expected = workbook_source["count"] if workbook_source else 0
+        if source["count"] != expected:
+            failures.append(
+                f"All ABC Classes source {label}: query={source['count']}, KPI={expected}"
+            )
+        class_sum = sum(
+            next(
+                row["count"]
+                for row in scope["sources"]
+                if row["label"] == label
+            )
+            for scope in month["kpiByAbc"].values()
+        )
+        if class_sum != source["count"]:
+            failures.append(
+                f"ABC class source sum {label}: {class_sum} != {source['count']}"
+            )
+
+    abc_totals = {row["label"]: row["total"] for row in month["abc"]}
+    class_totals = {
+        label: scope["total"] for label, scope in month["kpiByAbc"].items()
+    }
+    if class_totals != abc_totals:
+        failures.append(
+            f"ABC totals differ: class KPI={class_totals}, KPI sheet={abc_totals}"
+        )
+
+    if failures:
+        raise ValueError(
+            f"{filename} KPI by ABC Class validation failed: " + "; ".join(failures)
+        )
+
+
 def main() -> None:
     workbook_paths = sorted(ROOT.glob("EMR - Audit Reports - *.xlsx"))
     if not workbook_paths:
@@ -267,7 +447,8 @@ def main() -> None:
         print(
             f"{month['label']} {month['year']}: "
             f"{month['total']:,} items, {month['reconciled']:,} reconciled, "
-            f"{len(parts_by_month[month['key']]):,} part rows"
+            f"{len(parts_by_month[month['key']]):,} part rows, "
+            f"{len(month['kpiByAbc'])} filterable ABC classes"
         )
 
 

@@ -28,6 +28,28 @@ SOURCE_COLORS = {
     "100% Final Forecast": "#99a9b8",
     "No active blend weight": "#b55f62",
 }
+SOURCE_METRICS = {
+    "100% Hybrid Forecast": (
+        "Exceptions Items Driven 100% by Hybrid Forecast",
+        "Reconciled Items Driven 100% by Hybrid Forecast",
+    ),
+    "100% Final Forecast": (
+        "Exceptions Items Driven 100% by Final Forecast",
+        "Reconciled Items With 100% Final Forecast",
+    ),
+    "Mixed Forecast Source": (
+        "Exceptions Items With Mixed Forecast Source",
+        "Reconciled Items With Mixed Forecast Source",
+    ),
+    "Volume-adjusted / scaled blend": (
+        "Exceptions Items With Volume-Adjusted / Scaled Blend",
+        "Reconciled Items With Volume-Adjusted / Scaled Blend",
+    ),
+    "No active blend weight": (
+        "Exceptions Items With No Active Blend Weight",
+        "Reconciled Items With No Active Blend Weight",
+    ),
+}
 
 
 def canonical_source(value: object) -> str:
@@ -81,6 +103,103 @@ def load_payload() -> dict:
     return json.loads(text[payload_start + len(DATA_PREFIX) : -1])
 
 
+def build_scope_kpi(metrics: dict[str, object]) -> dict:
+    planner = {
+        "reconciled": {
+            "withOverrides": as_int(
+                metrics["Reconciled Items With Planner Adjusted Forecast"]
+            ),
+            "withoutOverrides": as_int(
+                metrics["Reconciled Items Without Planner Adjusted Forecast"]
+            ),
+        },
+        "exceptions": {
+            "withOverrides": as_int(
+                metrics["Exception Items With Planner Adjusted Forecast"]
+            ),
+            "withoutOverrides": as_int(
+                metrics["Exception Items Without Planner Adjusted Forecast"]
+            ),
+        },
+    }
+    sources = []
+    for label, (exception_metric, reconciled_metric) in SOURCE_METRICS.items():
+        exceptions = as_int(metrics[exception_metric])
+        reconciled = as_int(metrics[reconciled_metric])
+        sources.append(
+            {
+                "label": label,
+                "exceptions": exceptions,
+                "reconciled": reconciled,
+                "count": exceptions + reconciled,
+                "color": SOURCE_COLORS[label],
+            }
+        )
+
+    return {
+        "total": as_int(metrics["Total Items Count"]),
+        "reconciled": as_int(metrics["Total Combinations in Reconciled"]),
+        "exceptions": as_int(metrics["Total Items in Exceptions"]),
+        "automatic": as_int(metrics["Automatically Reconciled Items Count"]),
+        "manual": as_int(metrics["Manually Reconciled Items Count"]),
+        "planner": planner,
+        "overrides": (
+            planner["reconciled"]["withOverrides"]
+            + planner["exceptions"]["withOverrides"]
+        ),
+        "sources": sources,
+    }
+
+
+def load_class_kpis(workbook, target_month: datetime, filename: str) -> tuple[dict, dict]:
+    if "KPI by ABC Class" not in workbook.sheetnames:
+        return {}, {}
+
+    rows = list(workbook["KPI by ABC Class"].iter_rows(values_only=True))
+    expected_header = (
+        "target_month",
+        "emr_abc_class",
+        "number",
+        "group",
+        "count",
+    )
+    if not rows or tuple(rows[0][:5]) != expected_header:
+        raise AssertionError(f"{filename}: invalid KPI by ABC Class header")
+
+    scope_rows: dict[str, list[tuple]] = defaultdict(list)
+    for row in rows[1:]:
+        if row[0] is None:
+            continue
+        if parse_target_month(row[0]) != target_month:
+            raise AssertionError(
+                f"{filename}: ABC KPI target month {row[0]} does not match "
+                f"{target_month:%b-%y}"
+            )
+        scope_rows[str(row[1])].append(tuple(row[:5]))
+
+    if "All ABC Classes" not in scope_rows:
+        raise AssertionError(f"{filename}: missing All ABC Classes KPI scope")
+
+    expected_numbers = list(range(1, 24))
+    expected_metrics = {str(row[3]) for row in scope_rows["All ABC Classes"]}
+    for scope, rows_for_scope in scope_rows.items():
+        numbers = [as_int(row[2]) for row in rows_for_scope]
+        metrics = [str(row[3]) for row in rows_for_scope]
+        if numbers != expected_numbers:
+            raise AssertionError(
+                f"{filename}: {scope} metric numbers are not exactly 1 through 23"
+            )
+        if len(metrics) != len(set(metrics)) or set(metrics) != expected_metrics:
+            raise AssertionError(f"{filename}: {scope} has an incomplete KPI metric set")
+
+    parsed = {
+        scope: build_scope_kpi({str(row[3]): row[4] for row in rows_for_scope})
+        for scope, rows_for_scope in scope_rows.items()
+    }
+    all_scope = parsed.pop("All ABC Classes")
+    return all_scope, parsed
+
+
 def validate_workbook(
     path: Path,
     payload_months: dict[str, dict],
@@ -88,7 +207,10 @@ def validate_workbook(
 ) -> dict:
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
-        if workbook.sheetnames != ["KPIs", "Part Level Breakdown"]:
+        expected_sheets = ["KPIs", "Part Level Breakdown"]
+        if "KPI by ABC Class" in workbook.sheetnames:
+            expected_sheets = ["KPIs", "KPI by ABC Class", "Part Level Breakdown"]
+        if workbook.sheetnames != expected_sheets:
             raise AssertionError(f"{path.name}: unexpected sheets {workbook.sheetnames}")
 
         kpi_rows = list(workbook["KPIs"].iter_rows(values_only=True))
@@ -202,6 +324,11 @@ def validate_workbook(
             for label, row in abc_rows.items()
             if label != "emr_abc_class"
         ]
+        all_class_scope, class_kpis = load_class_kpis(
+            workbook,
+            target_month,
+            path.name,
+        )
         expected_month = {
             "key": month_key,
             "label": target_month.strftime("%b"),
@@ -218,9 +345,62 @@ def validate_workbook(
             ),
             "sources": sources,
             "abc": abc,
+            "kpiByAbc": class_kpis,
         }
         if payload_month != expected_month:
             raise AssertionError(f"{path.name}: serialized KPI payload differs from workbook")
+
+        if class_kpis:
+            class_checks = {
+                "total": total,
+                "reconciled": reconciled,
+                "exceptions": exceptions,
+                "automatic": automatic,
+                "manual": manual,
+                "overrides": expected_month["overrides"],
+            }
+            for field, expected in class_checks.items():
+                if all_class_scope[field] != expected:
+                    raise AssertionError(
+                        f"{path.name}: All ABC Classes {field} "
+                        f"{all_class_scope[field]} != {expected}"
+                    )
+                class_sum = sum(scope[field] for scope in class_kpis.values())
+                if class_sum != expected:
+                    raise AssertionError(
+                        f"{path.name}: ABC class {field} sum {class_sum} != {expected}"
+                    )
+
+            class_totals = {
+                label: scope["total"] for label, scope in class_kpis.items()
+            }
+            workbook_abc_totals = {row["label"]: row["total"] for row in abc}
+            if class_totals != workbook_abc_totals:
+                raise AssertionError(
+                    f"{path.name}: filtered KPI class totals differ from ABC breakdown"
+                )
+
+            all_sources = {
+                source["label"]: source["count"]
+                for source in all_class_scope["sources"]
+            }
+            for source in sources:
+                if all_sources[source["label"]] != source["count"]:
+                    raise AssertionError(
+                        f"{path.name}: All ABC Classes source {source['label']} differs"
+                    )
+                class_source_sum = sum(
+                    next(
+                        row["count"]
+                        for row in scope["sources"]
+                        if row["label"] == source["label"]
+                    )
+                    for scope in class_kpis.values()
+                )
+                if class_source_sum != source["count"]:
+                    raise AssertionError(
+                        f"{path.name}: ABC class source {source['label']} sum differs"
+                    )
 
         statuses = Counter(str(row[4]) for row in raw_parts)
         unknown_statuses = set(statuses) - RECONCILED_STATUSES - EXCEPTION_STATUSES
