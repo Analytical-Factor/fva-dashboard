@@ -137,6 +137,33 @@
     .planner-track .without { background: #cad8dd; }
     .planner-values { text-align: right; font-size: 10px; color: var(--muted); }
     .planner-values strong { display: block; color: var(--ink); font-size: 12px; }
+    .reconciliation-audit { margin-top: 22px; padding-top: 19px; border-top: 1px solid var(--line); }
+    .reconciliation-audit h3 { margin: 0; font-size: 15px; }
+    .reconciliation-audit-note {
+      max-width: 760px; margin: 6px 0 14px; color: var(--muted);
+      font-size: 10px; line-height: 1.5;
+    }
+    .reconciliation-audit-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .reconciliation-audit-table th,
+    .reconciliation-audit-table td { padding: 10px 9px; border-bottom: 1px solid var(--line); }
+    .reconciliation-audit-table th {
+      color: var(--muted); font-size: 9px; text-align: right;
+      text-transform: uppercase; letter-spacing: .55px;
+    }
+    .reconciliation-audit-table th:first-child,
+    .reconciliation-audit-table td:first-child { text-align: left; }
+    .reconciliation-audit-table td {
+      text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .reconciliation-audit-table td:nth-child(2) { color: var(--navy); font-weight: 800; }
+    .reconciliation-audit-table td:nth-child(3) { color: var(--orange); font-weight: 800; }
+    .reconciliation-audit-table tfoot td {
+      border-bottom: 0; border-top: 2px solid var(--line); font-weight: 800;
+    }
+    .reconciliation-audit-empty {
+      padding: 13px 14px; border-radius: 8px; background: #f3f6f6;
+      color: var(--muted); font-size: 10px;
+    }
     .breakdown-panel { padding: 0; overflow: hidden; }
     .breakdown-head { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 22px 24px 18px; }
     .period-selector { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 24px; border-top: 1px solid var(--line); background: #fbfcfc; }
@@ -263,6 +290,16 @@
                 <div class="planner-track" id="exceptionPlannerTrack"><span class="with"></span><span class="without"></span></div>
                 <div class="planner-values" id="exceptionPlannerValues"></div>
               </div>
+              <div class="reconciliation-audit">
+                <h3>Reconciled items by planner override</h3>
+                <p class="reconciliation-audit-note">Shows how automatically and manually reconciled items split by planner intervention. An override means the Adjusted Forecast or forecast blend weights differ from the system-generated values.</p>
+                <div class="reconciliation-audit-empty" id="reconciliationOverrideEmpty" hidden>Automatic/manual override detail is not available for this audit month.</div>
+                <table class="reconciliation-audit-table" id="reconciliationOverrideTable">
+                  <thead><tr><th>Reconciliation method</th><th>Total</th><th>With override</th><th>No override</th></tr></thead>
+                  <tbody id="reconciliationOverrideRows"></tbody>
+                  <tfoot id="reconciliationOverrideTotal"></tfoot>
+                </table>
+              </div>
             </article>
           </div>
 
@@ -370,6 +407,32 @@
           withoutOverrides: scopes.reduce((total, [, scope]) => total + scope.planner.exceptions.withoutOverrides, 0)
         }
       };
+      const reconciliationOverrides = scopes.every(
+        ([, scope]) => scope.reconciliationOverrides
+      )
+        ? {
+            automatic: {
+              withOverrides: scopes.reduce(
+                (total, [, scope]) => total + scope.reconciliationOverrides.automatic.withOverrides,
+                0
+              ),
+              withoutOverrides: scopes.reduce(
+                (total, [, scope]) => total + scope.reconciliationOverrides.automatic.withoutOverrides,
+                0
+              )
+            },
+            manual: {
+              withOverrides: scopes.reduce(
+                (total, [, scope]) => total + scope.reconciliationOverrides.manual.withOverrides,
+                0
+              ),
+              withoutOverrides: scopes.reduce(
+                (total, [, scope]) => total + scope.reconciliationOverrides.manual.withoutOverrides,
+                0
+              )
+            }
+          }
+        : null;
       const sources = new Map();
       scopes.forEach(([, scope]) => scope.sources.forEach(source => {
         const aggregate = sources.get(source.label) || { ...source, exceptions: 0, reconciled: 0, count: 0 };
@@ -389,6 +452,7 @@
         originalExceptions: scopes.every(([, scope]) => Number.isFinite(scope.originalExceptions))
           ? sum("originalExceptions")
           : null,
+        reconciliationOverrides,
         planner,
         overrides: planner.reconciled.withOverrides + planner.exceptions.withOverrides,
         sources: [...sources.values()],
@@ -629,6 +693,36 @@
       renderPlannerRow("exception", month.planner.exceptions);
     }
 
+    function renderReconciliationOverrideAudit(month) {
+      const table = document.getElementById("reconciliationOverrideTable");
+      const empty = document.getElementById("reconciliationOverrideEmpty");
+      const rows = document.getElementById("reconciliationOverrideRows");
+      const total = document.getElementById("reconciliationOverrideTotal");
+      const split = month.reconciliationOverrides;
+
+      table.hidden = !split;
+      empty.hidden = Boolean(split);
+      rows.innerHTML = "";
+      total.innerHTML = "";
+      if (!split) return;
+
+      const methods = [
+        ["Automatically reconciled", split.automatic],
+        ["Manually reconciled", split.manual]
+      ];
+      methods.forEach(([label, values]) => {
+        const methodTotal = values.withOverrides + values.withoutOverrides;
+        rows.insertAdjacentHTML(
+          "beforeend",
+          `<tr><td>${label}</td><td>${fmt.format(methodTotal)}</td><td>${fmt.format(values.withOverrides)}</td><td>${fmt.format(values.withoutOverrides)}</td></tr>`
+        );
+      });
+
+      const withOverrides = split.automatic.withOverrides + split.manual.withOverrides;
+      const withoutOverrides = split.automatic.withoutOverrides + split.manual.withoutOverrides;
+      total.innerHTML = `<tr><td>Total reconciled</td><td>${fmt.format(withOverrides + withoutOverrides)}</td><td>${fmt.format(withOverrides)}</td><td>${fmt.format(withoutOverrides)}</td></tr>`;
+    }
+
     function renderInsights(month, previous) {
       const reconciliationRate = rateOf(month.reconciled, month.total);
       const previousRate = previous ? rateOf(previous.reconciled, previous.total) : reconciliationRate;
@@ -838,6 +932,7 @@
       renderReconciliation(month);
       renderSources(month);
       renderPlanner(month);
+      renderReconciliationOverrideAudit(month);
       renderInsights(month, previous);
       renderAbc(month);
       renderOriginalExceptionWorkload(selectedMonth());
@@ -883,6 +978,12 @@
         ["Reconciliation", "Manually Reconciled", "", month.manual, month.manual],
         ["Exception Workload", "Original Exceptions", month.exceptions, month.manual, month.originalExceptions ?? ""],
         ["Planner Overrides", "With User Overrides", month.planner.exceptions.withOverrides, month.planner.reconciled.withOverrides, month.overrides],
+        ...(month.reconciliationOverrides ? [
+          ["Reconciliation Override", "Automatically Reconciled - With Override", "", month.reconciliationOverrides.automatic.withOverrides, month.reconciliationOverrides.automatic.withOverrides],
+          ["Reconciliation Override", "Automatically Reconciled - No Override", "", month.reconciliationOverrides.automatic.withoutOverrides, month.reconciliationOverrides.automatic.withoutOverrides],
+          ["Reconciliation Override", "Manually Reconciled - With Override", "", month.reconciliationOverrides.manual.withOverrides, month.reconciliationOverrides.manual.withOverrides],
+          ["Reconciliation Override", "Manually Reconciled - No Override", "", month.reconciliationOverrides.manual.withoutOverrides, month.reconciliationOverrides.manual.withoutOverrides]
+        ] : []),
         ...month.sources.map(source => ["Forecast Source", source.label, source.exceptions, source.reconciled, source.count]),
         ...month.abc.map(row => ["ABC Class", row.label, row.exceptions, row.reconciled, row.total])
       ];

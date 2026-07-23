@@ -50,6 +50,16 @@ SOURCE_METRICS = {
         "Reconciled Items With No Active Blend Weight",
     ),
 }
+RECONCILIATION_OVERRIDE_METRICS = {
+    "automatic": (
+        "Automatically Reconciled Items With User Overrides",
+        "Automatically Reconciled Items Without User Overrides",
+    ),
+    "manual": (
+        "Manually Reconciled Items With User Overrides",
+        "Manually Reconciled Items Without User Overrides",
+    ),
+}
 
 
 def canonical_source(value: object) -> str:
@@ -105,6 +115,22 @@ def load_payload() -> dict:
 
 def build_scope_kpi(metrics: dict[str, object]) -> dict:
     original_exceptions = metrics.get("Original Exception Items Count")
+    reconciliation_overrides = None
+    required_override_metrics = {
+        metric
+        for metric_pair in RECONCILIATION_OVERRIDE_METRICS.values()
+        for metric in metric_pair
+    }
+    if required_override_metrics.issubset(metrics):
+        reconciliation_overrides = {
+            method: {
+                "withOverrides": as_int(metrics[with_metric]),
+                "withoutOverrides": as_int(metrics[without_metric]),
+            }
+            for method, (with_metric, without_metric) in (
+                RECONCILIATION_OVERRIDE_METRICS.items()
+            )
+        }
     planner = {
         "reconciled": {
             "withOverrides": as_int(
@@ -146,6 +172,7 @@ def build_scope_kpi(metrics: dict[str, object]) -> dict:
         "originalExceptions": (
             as_int(original_exceptions) if original_exceptions is not None else None
         ),
+        "reconciliationOverrides": reconciliation_overrides,
         "planner": planner,
         "overrides": (
             planner["reconciled"]["withOverrides"]
@@ -185,7 +212,7 @@ def load_class_kpis(workbook, target_month: datetime, filename: str) -> tuple[di
         raise AssertionError(f"{filename}: missing All ABC Classes KPI scope")
 
     expected_metrics = {str(row[3]) for row in scope_rows["All ABC Classes"]}
-    metric_count = 24 if "Original Exception Items Count" in expected_metrics else 23
+    metric_count = max(as_int(row[2]) for row in scope_rows["All ABC Classes"])
     expected_numbers = list(range(1, metric_count + 1))
     for scope, rows_for_scope in scope_rows.items():
         numbers = [as_int(row[2]) for row in rows_for_scope]
@@ -344,6 +371,9 @@ def validate_workbook(
             "automatic": automatic,
             "manual": manual,
             "originalExceptions": all_class_scope.get("originalExceptions"),
+            "reconciliationOverrides": all_class_scope.get(
+                "reconciliationOverrides"
+            ),
             "planner": planner_data,
             "overrides": (
                 planner_data["reconciled"]["withOverrides"]
@@ -359,19 +389,71 @@ def validate_workbook(
         if class_kpis:
             scopes = {"All ABC Classes": all_class_scope, **class_kpis}
             for label, scope in scopes.items():
-                if scope["originalExceptions"] is None:
-                    continue
-                expected_original = scope["exceptions"] + scope["manual"]
-                if scope["originalExceptions"] != expected_original:
-                    raise AssertionError(
-                        f"{path.name}: {label} original exceptions "
-                        f"{scope['originalExceptions']} != {expected_original}"
-                    )
-                if scope["originalExceptions"] != scope["total"] - scope["automatic"]:
-                    raise AssertionError(
-                        f"{path.name}: {label} original exceptions do not "
-                        "exclude only automatically reconciled items"
-                    )
+                if scope["originalExceptions"] is not None:
+                    expected_original = scope["exceptions"] + scope["manual"]
+                    if scope["originalExceptions"] != expected_original:
+                        raise AssertionError(
+                            f"{path.name}: {label} original exceptions "
+                            f"{scope['originalExceptions']} != {expected_original}"
+                        )
+                    if scope["originalExceptions"] != scope["total"] - scope["automatic"]:
+                        raise AssertionError(
+                            f"{path.name}: {label} original exceptions do not "
+                            "exclude only automatically reconciled items"
+                        )
+
+                reconciliation_overrides = scope["reconciliationOverrides"]
+                if reconciliation_overrides:
+                    automatic_split = reconciliation_overrides["automatic"]
+                    manual_split = reconciliation_overrides["manual"]
+                    split_checks = {
+                        "automatic": (
+                            automatic_split["withOverrides"]
+                            + automatic_split["withoutOverrides"],
+                            scope["automatic"],
+                        ),
+                        "manual": (
+                            manual_split["withOverrides"]
+                            + manual_split["withoutOverrides"],
+                            scope["manual"],
+                        ),
+                        "with override": (
+                            automatic_split["withOverrides"]
+                            + manual_split["withOverrides"],
+                            scope["planner"]["reconciled"]["withOverrides"],
+                        ),
+                        "without override": (
+                            automatic_split["withoutOverrides"]
+                            + manual_split["withoutOverrides"],
+                            scope["planner"]["reconciled"]["withoutOverrides"],
+                        ),
+                    }
+                    for split_label, (actual, expected) in split_checks.items():
+                        if actual != expected:
+                            raise AssertionError(
+                                f"{path.name}: {label} reconciliation "
+                                f"{split_label} {actual} != {expected}"
+                            )
+
+            reconciliation_overrides = all_class_scope["reconciliationOverrides"]
+            if reconciliation_overrides:
+                status_counts = Counter(part[3] for part in payload_parts)
+                manual_split = reconciliation_overrides["manual"]
+                manual_status_checks = {
+                    "manual with override": (
+                        manual_split["withOverrides"],
+                        status_counts["Accepted with user overrides"],
+                    ),
+                    "manual without override": (
+                        manual_split["withoutOverrides"],
+                        status_counts["Accepted with no user overrides"],
+                    ),
+                }
+                for label, (actual, expected) in manual_status_checks.items():
+                    if actual != expected:
+                        raise AssertionError(
+                            f"{path.name}: {label} {actual} != {expected}"
+                        )
 
             class_checks = {
                 "total": total,
@@ -396,6 +478,22 @@ def validate_workbook(
                     raise AssertionError(
                         f"{path.name}: ABC class {field} sum {class_sum} != {expected}"
                     )
+
+            if all_class_scope["reconciliationOverrides"]:
+                for method in ("automatic", "manual"):
+                    for field in ("withOverrides", "withoutOverrides"):
+                        expected = all_class_scope["reconciliationOverrides"][
+                            method
+                        ][field]
+                        class_sum = sum(
+                            scope["reconciliationOverrides"][method][field]
+                            for scope in class_kpis.values()
+                        )
+                        if class_sum != expected:
+                            raise AssertionError(
+                                f"{path.name}: ABC class {method} {field} "
+                                f"sum {class_sum} != {expected}"
+                            )
 
             class_totals = {
                 label: scope["total"] for label, scope in class_kpis.items()

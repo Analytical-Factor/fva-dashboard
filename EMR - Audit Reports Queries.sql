@@ -11,7 +11,7 @@ Contents:
 
 Backup parameter:
 Set every target_month_start value to the first day of the month represented by
-the database backup. For the current April 2026 backup, use DATE '2026-04-01'.
+the database backup. For the current February 2026 backup, use DATE '2026-02-01'.
 Only section separators were added to make the file easier to navigate.
 ===============================================================================
 */
@@ -52,7 +52,7 @@ Only section separators were added to make the file easier to navigate.
 -- All ds_matrix and ds_data logic is limited to demand_class_id = 0.
 
 WITH params AS (
-    SELECT DATE '2026-04-01' AS target_month_start
+    SELECT DATE '2026-02-01' AS target_month_start
 ),
 month_window AS (
     SELECT
@@ -263,12 +263,16 @@ ORDER BY
 --     2. Hybrid / Final Forecast blend weights are overridden, OR
 --     3. Hybrid Forecast method blend weights are overridden
 --
+-- Reconciliation override audit:
+--   Splits reconciled items by reconciliation method and user-override status.
+--   Each method total equals its with-override and without-override counts.
+--
 -- Forecast source KPIs:
 --   Use normalized active Hybrid / Final Forecast weights.
 --   Items with volume_adjustment_required = true are counted separately.
 
 WITH params AS (
-    SELECT DATE '2026-04-01' AS target_month_start
+    SELECT DATE '2026-02-01' AS target_month_start
 ),
 base_items AS (
     SELECT
@@ -442,6 +446,22 @@ kpi_counts AS (
               AND has_user_override = 0
         )::numeric AS reconciled_without_override,
         COUNT(*) FILTER (
+            WHERE reconciled = 2
+              AND has_user_override = 1
+        )::numeric AS automatically_reconciled_with_override,
+        COUNT(*) FILTER (
+            WHERE reconciled = 2
+              AND has_user_override = 0
+        )::numeric AS automatically_reconciled_without_override,
+        COUNT(*) FILTER (
+            WHERE reconciled IN (1, 3)
+              AND has_user_override = 1
+        )::numeric AS manually_reconciled_with_override,
+        COUNT(*) FILTER (
+            WHERE reconciled IN (1, 3)
+              AND has_user_override = 0
+        )::numeric AS manually_reconciled_without_override,
+        COUNT(*) FILTER (
             WHERE reconciled = 0
               AND has_user_override = 1
         )::numeric AS exceptions_with_override,
@@ -562,7 +582,27 @@ CROSS JOIN LATERAL (
         (21, 'Reconciled Items With Volume-Adjusted / Scaled Blend', kc.reconciled_scaled),
         (22, 'Exceptions Items With No Active Blend Weight', kc.exceptions_no_weight),
         (23, 'Reconciled Items With No Active Blend Weight', kc.reconciled_no_weight),
-        (24, 'Original Exception Items Count', kc.original_exception_items)
+        (24, 'Original Exception Items Count', kc.original_exception_items),
+        (
+            25,
+            'Automatically Reconciled Items With User Overrides',
+            kc.automatically_reconciled_with_override
+        ),
+        (
+            26,
+            'Automatically Reconciled Items Without User Overrides',
+            kc.automatically_reconciled_without_override
+        ),
+        (
+            27,
+            'Manually Reconciled Items With User Overrides',
+            kc.manually_reconciled_with_override
+        ),
+        (
+            28,
+            'Manually Reconciled Items Without User Overrides',
+            kc.manually_reconciled_without_override
+        )
 ) AS metric(number, group_name, count)
 ORDER BY
     CASE

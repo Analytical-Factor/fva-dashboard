@@ -132,6 +132,30 @@ function aggregateClassKpis(month, labels) {
       ),
     },
   };
+  const reconciliationOverrides = scopes.every((scope) => scope.reconciliationOverrides)
+    ? {
+        automatic: {
+          withOverrides: scopes.reduce(
+            (total, scope) => total + scope.reconciliationOverrides.automatic.withOverrides,
+            0
+          ),
+          withoutOverrides: scopes.reduce(
+            (total, scope) => total + scope.reconciliationOverrides.automatic.withoutOverrides,
+            0
+          ),
+        },
+        manual: {
+          withOverrides: scopes.reduce(
+            (total, scope) => total + scope.reconciliationOverrides.manual.withOverrides,
+            0
+          ),
+          withoutOverrides: scopes.reduce(
+            (total, scope) => total + scope.reconciliationOverrides.manual.withoutOverrides,
+            0
+          ),
+        },
+      }
+    : null;
   return {
     total: sum("total"),
     reconciled: sum("reconciled"),
@@ -141,6 +165,7 @@ function aggregateClassKpis(month, labels) {
     originalExceptions: scopes.every((scope) => Number.isFinite(scope.originalExceptions))
       ? sum("originalExceptions")
       : null,
+    reconciliationOverrides,
     planner,
     overrides: planner.reconciled.withOverrides + planner.exceptions.withOverrides,
     sources,
@@ -334,6 +359,50 @@ async function main() {
           === exceptionPlannerLabel,
         month.key + ": exception planner split mismatch"
       );
+      if (month.reconciliationOverrides) {
+        const split = month.reconciliationOverrides;
+        const expectedRows = [
+          [
+            "Automatically reconciled",
+            numberFormat.format(month.automatic),
+            numberFormat.format(split.automatic.withOverrides),
+            numberFormat.format(split.automatic.withoutOverrides),
+          ],
+          [
+            "Manually reconciled",
+            numberFormat.format(month.manual),
+            numberFormat.format(split.manual.withOverrides),
+            numberFormat.format(split.manual.withoutOverrides),
+          ],
+        ];
+        const actualRows = await page.locator("#reconciliationOverrideRows tr").evaluateAll(
+          (rows) => rows.map((row) => [...row.cells].map((cell) => cell.innerText.trim()))
+        );
+        assert(
+          JSON.stringify(actualRows) === JSON.stringify(expectedRows),
+          month.key + ": reconciliation override audit rows mismatch"
+        );
+        const expectedTotal = [
+          "Total reconciled",
+          numberFormat.format(month.reconciled),
+          numberFormat.format(month.planner.reconciled.withOverrides),
+          numberFormat.format(month.planner.reconciled.withoutOverrides),
+        ];
+        assert(
+          JSON.stringify(await page.locator("#reconciliationOverrideTotal td").allInnerTexts())
+            === JSON.stringify(expectedTotal),
+          month.key + ": reconciliation override audit total mismatch"
+        );
+        assert(
+          await page.locator("#reconciliationOverrideTable").isVisible(),
+          month.key + ": reconciliation override audit table is hidden"
+        );
+      } else {
+        assert(
+          await page.locator("#reconciliationOverrideEmpty").isVisible(),
+          month.key + ": unavailable reconciliation override state is missing"
+        );
+      }
 
       const kpiRows = await saveDownload(
         page,
@@ -360,6 +429,36 @@ async function main() {
           month.planner.reconciled.withOverrides,
           month.overrides,
         ],
+        ...(month.reconciliationOverrides ? [
+          [
+            "Reconciliation Override",
+            "Automatically Reconciled - With Override",
+            "",
+            month.reconciliationOverrides.automatic.withOverrides,
+            month.reconciliationOverrides.automatic.withOverrides,
+          ],
+          [
+            "Reconciliation Override",
+            "Automatically Reconciled - No Override",
+            "",
+            month.reconciliationOverrides.automatic.withoutOverrides,
+            month.reconciliationOverrides.automatic.withoutOverrides,
+          ],
+          [
+            "Reconciliation Override",
+            "Manually Reconciled - With Override",
+            "",
+            month.reconciliationOverrides.manual.withOverrides,
+            month.reconciliationOverrides.manual.withOverrides,
+          ],
+          [
+            "Reconciliation Override",
+            "Manually Reconciled - No Override",
+            "",
+            month.reconciliationOverrides.manual.withoutOverrides,
+            month.reconciliationOverrides.manual.withoutOverrides,
+          ],
+        ] : []),
         ...month.sources.map((source) => [
           "Forecast Source",
           source.label,
@@ -493,6 +592,36 @@ async function main() {
         scopedApril.planner.reconciled.withOverrides,
         scopedApril.overrides,
       ],
+      ...(scopedApril.reconciliationOverrides ? [
+        [
+          "Reconciliation Override",
+          "Automatically Reconciled - With Override",
+          "",
+          scopedApril.reconciliationOverrides.automatic.withOverrides,
+          scopedApril.reconciliationOverrides.automatic.withOverrides,
+        ],
+        [
+          "Reconciliation Override",
+          "Automatically Reconciled - No Override",
+          "",
+          scopedApril.reconciliationOverrides.automatic.withoutOverrides,
+          scopedApril.reconciliationOverrides.automatic.withoutOverrides,
+        ],
+        [
+          "Reconciliation Override",
+          "Manually Reconciled - With Override",
+          "",
+          scopedApril.reconciliationOverrides.manual.withOverrides,
+          scopedApril.reconciliationOverrides.manual.withOverrides,
+        ],
+        [
+          "Reconciliation Override",
+          "Manually Reconciled - No Override",
+          "",
+          scopedApril.reconciliationOverrides.manual.withoutOverrides,
+          scopedApril.reconciliationOverrides.manual.withoutOverrides,
+        ],
+      ] : []),
       ...scopedApril.sources.map((source) => [
         "Forecast Source",
         source.label,

@@ -49,6 +49,16 @@ EXCEPTION_STATUSES = {
     "Maintained in Exceptions with user overrides",
     "Maintained in Exceptions with no user overrides",
 }
+RECONCILIATION_OVERRIDE_METRICS = {
+    "automatic": (
+        "Automatically Reconciled Items With User Overrides",
+        "Automatically Reconciled Items Without User Overrides",
+    ),
+    "manual": (
+        "Manually Reconciled Items With User Overrides",
+        "Manually Reconciled Items Without User Overrides",
+    ),
+}
 
 
 def find_row(rows: list[tuple], label: str) -> int:
@@ -91,6 +101,22 @@ def parse_target_month(value: object) -> datetime:
 
 def build_scope_kpi(metrics: dict[str, object]) -> dict:
     original_exceptions = metrics.get("Original Exception Items Count")
+    reconciliation_overrides = None
+    required_override_metrics = {
+        metric
+        for metric_pair in RECONCILIATION_OVERRIDE_METRICS.values()
+        for metric in metric_pair
+    }
+    if required_override_metrics.issubset(metrics):
+        reconciliation_overrides = {
+            method: {
+                "withOverrides": as_int(metrics[with_metric]),
+                "withoutOverrides": as_int(metrics[without_metric]),
+            }
+            for method, (with_metric, without_metric) in (
+                RECONCILIATION_OVERRIDE_METRICS.items()
+            )
+        }
     planner = {
         "reconciled": {
             "withOverrides": as_int(
@@ -132,6 +158,7 @@ def build_scope_kpi(metrics: dict[str, object]) -> dict:
         "originalExceptions": (
             as_int(original_exceptions) if original_exceptions is not None else None
         ),
+        "reconciliationOverrides": reconciliation_overrides,
         "planner": planner,
         "overrides": (
             planner["reconciled"]["withOverrides"]
@@ -285,6 +312,9 @@ def load_workbook_data(path: Path) -> tuple[dict, list[list]]:
             "automatic": automatic,
             "manual": manual,
             "originalExceptions": all_class_scope.get("originalExceptions"),
+            "reconciliationOverrides": all_class_scope.get(
+                "reconciliationOverrides"
+            ),
             "planner": planner_data,
             "overrides": (
                 planner_data["reconciled"]["withOverrides"]
@@ -335,6 +365,38 @@ def validate_month(filename: str, month: dict, parts: list[list]) -> None:
             month["exceptions"],
         ),
     }
+    reconciliation_overrides = month["reconciliationOverrides"]
+    if reconciliation_overrides:
+        automatic = reconciliation_overrides["automatic"]
+        manual = reconciliation_overrides["manual"]
+        checks.update(
+            {
+                "automatic override split": (
+                    automatic["withOverrides"] + automatic["withoutOverrides"],
+                    month["automatic"],
+                ),
+                "manual override split": (
+                    manual["withOverrides"] + manual["withoutOverrides"],
+                    month["manual"],
+                ),
+                "reconciled with-override split": (
+                    automatic["withOverrides"] + manual["withOverrides"],
+                    month["planner"]["reconciled"]["withOverrides"],
+                ),
+                "reconciled without-override split": (
+                    automatic["withoutOverrides"] + manual["withoutOverrides"],
+                    month["planner"]["reconciled"]["withoutOverrides"],
+                ),
+                "manual with-override status rows": (
+                    manual["withOverrides"],
+                    status_counts["Accepted with user overrides"],
+                ),
+                "manual without-override status rows": (
+                    manual["withoutOverrides"],
+                    status_counts["Accepted with no user overrides"],
+                ),
+            }
+        )
 
     for source in month["sources"]:
         checks[f"source {source['label']}"] = (
@@ -378,18 +440,46 @@ def validate_class_kpis(filename: str, month: dict, all_scope: dict) -> None:
     failures = []
     scopes = {"All ABC Classes": all_scope, **month["kpiByAbc"]}
     for label, scope in scopes.items():
-        if scope["originalExceptions"] is None:
-            continue
-        expected_original = scope["exceptions"] + scope["manual"]
-        if scope["originalExceptions"] != expected_original:
-            failures.append(
-                f"{label} original exceptions: "
-                f"{scope['originalExceptions']} != {expected_original}"
-            )
-        if scope["originalExceptions"] != scope["total"] - scope["automatic"]:
-            failures.append(
-                f"{label} original exceptions do not exclude only automatic items"
-            )
+        if scope["originalExceptions"] is not None:
+            expected_original = scope["exceptions"] + scope["manual"]
+            if scope["originalExceptions"] != expected_original:
+                failures.append(
+                    f"{label} original exceptions: "
+                    f"{scope['originalExceptions']} != {expected_original}"
+                )
+            if scope["originalExceptions"] != scope["total"] - scope["automatic"]:
+                failures.append(
+                    f"{label} original exceptions do not exclude only automatic items"
+                )
+
+        reconciliation_overrides = scope["reconciliationOverrides"]
+        if reconciliation_overrides:
+            automatic = reconciliation_overrides["automatic"]
+            manual = reconciliation_overrides["manual"]
+            split_checks = {
+                "automatic": (
+                    automatic["withOverrides"] + automatic["withoutOverrides"],
+                    scope["automatic"],
+                ),
+                "manual": (
+                    manual["withOverrides"] + manual["withoutOverrides"],
+                    scope["manual"],
+                ),
+                "with override": (
+                    automatic["withOverrides"] + manual["withOverrides"],
+                    scope["planner"]["reconciled"]["withOverrides"],
+                ),
+                "without override": (
+                    automatic["withoutOverrides"] + manual["withoutOverrides"],
+                    scope["planner"]["reconciled"]["withoutOverrides"],
+                ),
+            }
+            for split_label, (actual, expected) in split_checks.items():
+                if actual != expected:
+                    failures.append(
+                        f"{label} reconciliation {split_label}: "
+                        f"{actual} != {expected}"
+                    )
 
     for field, expected in aggregate_checks.items():
         if all_scope[field] != expected:
@@ -401,6 +491,20 @@ def validate_class_kpis(filename: str, month: dict, all_scope: dict) -> None:
             failures.append(
                 f"ABC class sum {field}: query={class_sum}, KPI={expected}"
             )
+
+    if all_scope["reconciliationOverrides"]:
+        for method in ("automatic", "manual"):
+            for field in ("withOverrides", "withoutOverrides"):
+                expected = all_scope["reconciliationOverrides"][method][field]
+                class_sum = sum(
+                    scope["reconciliationOverrides"][method][field]
+                    for scope in month["kpiByAbc"].values()
+                )
+                if class_sum != expected:
+                    failures.append(
+                        f"ABC class {method} {field} sum: "
+                        f"{class_sum} != {expected}"
+                    )
 
     all_sources = {source["label"]: source for source in all_scope["sources"]}
     workbook_sources = {source["label"]: source for source in month["sources"]}
