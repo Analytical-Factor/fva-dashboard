@@ -11,7 +11,7 @@ Contents:
 
 Backup parameter:
 Set every target_month_start value to the first day of the month represented by
-the database backup. For the current May 2026 backup, use DATE '2026-05-01'.
+the database backup. For the current April 2026 backup, use DATE '2026-04-01'.
 Only section separators were added to make the file easier to navigate.
 ===============================================================================
 */
@@ -52,7 +52,7 @@ Only section separators were added to make the file easier to navigate.
 -- All ds_matrix and ds_data logic is limited to demand_class_id = 0.
 
 WITH params AS (
-    SELECT DATE '2026-05-01' AS target_month_start
+    SELECT DATE '2026-04-01' AS target_month_start
 ),
 month_window AS (
     SELECT
@@ -247,6 +247,11 @@ ORDER BY
 --   exclude IN (0, 1)
 --   One combination per item_id + location_id
 --
+-- Original exception workload:
+--   Current exceptions (reconciled = 0)
+--   plus manually reconciled items (reconciled IN (1, 3)).
+--   Automatically reconciled items (reconciled = 2) are excluded.
+--
 -- User override logic:
 --   Reconciled items:
 --     1. Adjusted Forecast differs from AF Blended Forecast (expected_demand), OR
@@ -263,7 +268,7 @@ ORDER BY
 --   Items with volume_adjustment_required = true are counted separately.
 
 WITH params AS (
-    SELECT DATE '2026-05-01' AS target_month_start
+    SELECT DATE '2026-04-01' AS target_month_start
 ),
 base_items AS (
     SELECT
@@ -427,6 +432,7 @@ kpi_counts AS (
         COUNT(*) FILTER (WHERE reconciled >= 1)::numeric AS reconciled_items,
         COUNT(*) FILTER (WHERE reconciled = 2)::numeric AS automatically_reconciled_items,
         COUNT(*) FILTER (WHERE reconciled IN (1, 3))::numeric AS manually_reconciled_items,
+        COUNT(*) FILTER (WHERE reconciled IN (0, 1, 3))::numeric AS original_exception_items,
         COUNT(*) FILTER (
             WHERE reconciled >= 1
               AND has_user_override = 1
@@ -555,7 +561,8 @@ CROSS JOIN LATERAL (
         (20, 'Exceptions Items With Volume-Adjusted / Scaled Blend', kc.exceptions_scaled),
         (21, 'Reconciled Items With Volume-Adjusted / Scaled Blend', kc.reconciled_scaled),
         (22, 'Exceptions Items With No Active Blend Weight', kc.exceptions_no_weight),
-        (23, 'Reconciled Items With No Active Blend Weight', kc.reconciled_no_weight)
+        (23, 'Reconciled Items With No Active Blend Weight', kc.reconciled_no_weight),
+        (24, 'Original Exception Items Count', kc.original_exception_items)
 ) AS metric(number, group_name, count)
 ORDER BY
     CASE

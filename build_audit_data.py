@@ -90,6 +90,7 @@ def parse_target_month(value: object) -> datetime:
 
 
 def build_scope_kpi(metrics: dict[str, object]) -> dict:
+    original_exceptions = metrics.get("Original Exception Items Count")
     planner = {
         "reconciled": {
             "withOverrides": as_int(
@@ -128,6 +129,9 @@ def build_scope_kpi(metrics: dict[str, object]) -> dict:
         "exceptions": as_int(metrics["Total Items in Exceptions"]),
         "automatic": as_int(metrics["Automatically Reconciled Items Count"]),
         "manual": as_int(metrics["Manually Reconciled Items Count"]),
+        "originalExceptions": (
+            as_int(original_exceptions) if original_exceptions is not None else None
+        ),
         "planner": planner,
         "overrides": (
             planner["reconciled"]["withOverrides"]
@@ -280,6 +284,7 @@ def load_workbook_data(path: Path) -> tuple[dict, list[list]]:
             "exceptions": exceptions,
             "automatic": automatic,
             "manual": manual,
+            "originalExceptions": all_class_scope.get("originalExceptions"),
             "planner": planner_data,
             "overrides": (
                 planner_data["reconciled"]["withOverrides"]
@@ -368,7 +373,24 @@ def validate_class_kpis(filename: str, month: dict, all_scope: dict) -> None:
         "manual": month["manual"],
         "overrides": month["overrides"],
     }
+    if month["originalExceptions"] is not None:
+        aggregate_checks["originalExceptions"] = month["originalExceptions"]
     failures = []
+    scopes = {"All ABC Classes": all_scope, **month["kpiByAbc"]}
+    for label, scope in scopes.items():
+        if scope["originalExceptions"] is None:
+            continue
+        expected_original = scope["exceptions"] + scope["manual"]
+        if scope["originalExceptions"] != expected_original:
+            failures.append(
+                f"{label} original exceptions: "
+                f"{scope['originalExceptions']} != {expected_original}"
+            )
+        if scope["originalExceptions"] != scope["total"] - scope["automatic"]:
+            failures.append(
+                f"{label} original exceptions do not exclude only automatic items"
+            )
+
     for field, expected in aggregate_checks.items():
         if all_scope[field] != expected:
             failures.append(

@@ -138,6 +138,9 @@ function aggregateClassKpis(month, labels) {
     exceptions: sum("exceptions"),
     automatic: sum("automatic"),
     manual: sum("manual"),
+    originalExceptions: scopes.every((scope) => Number.isFinite(scope.originalExceptions))
+      ? sum("originalExceptions")
+      : null,
     planner,
     overrides: planner.reconciled.withOverrides + planner.exceptions.withOverrides,
     sources,
@@ -262,6 +265,54 @@ async function main() {
           === (classLabels.length === 0),
         month.key + ": ABC filter availability does not match exact class KPI data"
       );
+      if (Number.isFinite(month.originalExceptions)) {
+        const workloadHeaders = (
+          await page.locator(".workload-table thead th").allInnerTexts()
+        ).map((header) => header.replace(/\s+/g, " ").trim());
+        assert(
+          JSON.stringify(workloadHeaders) === JSON.stringify([
+            "ABC CLASS",
+            "ORIGINAL",
+            "MANUALLY RECONCILED",
+            "STILL IN EXCEPTIONS",
+          ]),
+          month.key + ": original exception workload headers mismatch"
+        );
+        const expectedWorkloadRows = Object.entries(month.kpiByAbc)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([label, scope]) => [
+            label,
+            numberFormat.format(scope.originalExceptions),
+            numberFormat.format(scope.manual),
+            numberFormat.format(scope.exceptions),
+          ]);
+        const actualWorkloadRows = await page.locator("#workloadRows tr").evaluateAll(
+          (rows) => rows.map((row) => [...row.cells].map((cell) => cell.innerText.trim()))
+        );
+        assert(
+          JSON.stringify(actualWorkloadRows) === JSON.stringify(expectedWorkloadRows),
+          month.key + ": original exception ABC rows mismatch"
+        );
+        const workloadValues = await page.locator("#workloadTotal td").allInnerTexts();
+        assert(
+          JSON.stringify(workloadValues) === JSON.stringify([
+            "Total",
+            numberFormat.format(month.originalExceptions),
+            numberFormat.format(month.manual),
+            numberFormat.format(month.exceptions),
+          ]),
+          month.key + ": original exception workload total mismatch"
+        );
+        assert(
+          (await page.locator("#workloadRows tr").count()) === classLabels.length,
+          month.key + ": original exception ABC row count mismatch"
+        );
+      } else {
+        assert(
+          await page.locator("#workloadRows .workload-empty").isVisible(),
+          month.key + ": unavailable original exception state is missing"
+        );
+      }
 
       const reconciledPlannerLabel =
         numberFormat.format(month.planner.reconciled.withOverrides)
@@ -295,6 +346,13 @@ async function main() {
         ["Overall", "Total Items", month.exceptions, month.reconciled, month.total],
         ["Reconciliation", "Automatically Reconciled", "", month.automatic, month.automatic],
         ["Reconciliation", "Manually Reconciled", "", month.manual, month.manual],
+        [
+          "Exception Workload",
+          "Original Exceptions",
+          month.exceptions,
+          month.manual,
+          month.originalExceptions ?? "",
+        ],
         [
           "Planner Overrides",
           "With User Overrides",
@@ -361,6 +419,18 @@ async function main() {
           === numberFormat.format(scopedMonth.overrides),
         month.label + ": single-class override card mismatch"
       );
+      if (Number.isFinite(scopedMonth.originalExceptions)) {
+        const workloadValues = await page.locator("#workloadTotal td").allInnerTexts();
+        assert(
+          JSON.stringify(workloadValues) === JSON.stringify([
+            "Total",
+            numberFormat.format(scopedMonth.originalExceptions),
+            numberFormat.format(scopedMonth.manual),
+            numberFormat.format(scopedMonth.exceptions),
+          ]),
+          month.label + ": single-class original exception workload mismatch"
+        );
+      }
       await page.locator('[data-abc-class="all"]').click();
     }
 
@@ -409,6 +479,13 @@ async function main() {
         scopedApril.automatic,
       ],
       ["Reconciliation", "Manually Reconciled", "", scopedApril.manual, scopedApril.manual],
+      [
+        "Exception Workload",
+        "Original Exceptions",
+        scopedApril.exceptions,
+        scopedApril.manual,
+        scopedApril.originalExceptions ?? "",
+      ],
       [
         "Planner Overrides",
         "With User Overrides",

@@ -104,6 +104,7 @@ def load_payload() -> dict:
 
 
 def build_scope_kpi(metrics: dict[str, object]) -> dict:
+    original_exceptions = metrics.get("Original Exception Items Count")
     planner = {
         "reconciled": {
             "withOverrides": as_int(
@@ -142,6 +143,9 @@ def build_scope_kpi(metrics: dict[str, object]) -> dict:
         "exceptions": as_int(metrics["Total Items in Exceptions"]),
         "automatic": as_int(metrics["Automatically Reconciled Items Count"]),
         "manual": as_int(metrics["Manually Reconciled Items Count"]),
+        "originalExceptions": (
+            as_int(original_exceptions) if original_exceptions is not None else None
+        ),
         "planner": planner,
         "overrides": (
             planner["reconciled"]["withOverrides"]
@@ -180,14 +184,15 @@ def load_class_kpis(workbook, target_month: datetime, filename: str) -> tuple[di
     if "All ABC Classes" not in scope_rows:
         raise AssertionError(f"{filename}: missing All ABC Classes KPI scope")
 
-    expected_numbers = list(range(1, 24))
     expected_metrics = {str(row[3]) for row in scope_rows["All ABC Classes"]}
+    metric_count = 24 if "Original Exception Items Count" in expected_metrics else 23
+    expected_numbers = list(range(1, metric_count + 1))
     for scope, rows_for_scope in scope_rows.items():
         numbers = [as_int(row[2]) for row in rows_for_scope]
         metrics = [str(row[3]) for row in rows_for_scope]
         if numbers != expected_numbers:
             raise AssertionError(
-                f"{filename}: {scope} metric numbers are not exactly 1 through 23"
+                f"{filename}: {scope} metric numbers are not exactly 1 through {metric_count}"
             )
         if len(metrics) != len(set(metrics)) or set(metrics) != expected_metrics:
             raise AssertionError(f"{filename}: {scope} has an incomplete KPI metric set")
@@ -338,6 +343,7 @@ def validate_workbook(
             "exceptions": exceptions,
             "automatic": automatic,
             "manual": manual,
+            "originalExceptions": all_class_scope.get("originalExceptions"),
             "planner": planner_data,
             "overrides": (
                 planner_data["reconciled"]["withOverrides"]
@@ -351,6 +357,22 @@ def validate_workbook(
             raise AssertionError(f"{path.name}: serialized KPI payload differs from workbook")
 
         if class_kpis:
+            scopes = {"All ABC Classes": all_class_scope, **class_kpis}
+            for label, scope in scopes.items():
+                if scope["originalExceptions"] is None:
+                    continue
+                expected_original = scope["exceptions"] + scope["manual"]
+                if scope["originalExceptions"] != expected_original:
+                    raise AssertionError(
+                        f"{path.name}: {label} original exceptions "
+                        f"{scope['originalExceptions']} != {expected_original}"
+                    )
+                if scope["originalExceptions"] != scope["total"] - scope["automatic"]:
+                    raise AssertionError(
+                        f"{path.name}: {label} original exceptions do not "
+                        "exclude only automatically reconciled items"
+                    )
+
             class_checks = {
                 "total": total,
                 "reconciled": reconciled,
@@ -359,6 +381,10 @@ def validate_workbook(
                 "manual": manual,
                 "overrides": expected_month["overrides"],
             }
+            if expected_month["originalExceptions"] is not None:
+                class_checks["originalExceptions"] = expected_month[
+                    "originalExceptions"
+                ]
             for field, expected in class_checks.items():
                 if all_class_scope[field] != expected:
                     raise AssertionError(

@@ -108,6 +108,26 @@
     .abc-track span { display: block; height: 100%; border-radius: inherit; background: var(--teal); }
     .abc-row.low .abc-track span { background: var(--orange); }
     .abc-rate { text-align: right; font-weight: 800; }
+    .workload-card { padding: 20px; }
+    .workload-note {
+      margin-top: 13px; padding: 10px 12px; border-radius: 8px;
+      background: #f3f8f8; color: var(--muted); font-size: 10px; line-height: 1.45;
+    }
+    .workload-table { width: 100%; margin-top: 14px; border-collapse: collapse; font-size: 11px; }
+    .workload-table th, .workload-table td { padding: 9px 6px; border-bottom: 1px solid var(--line); }
+    .workload-table th {
+      color: var(--muted); font-size: 9px; text-align: right;
+      text-transform: uppercase; letter-spacing: .55px;
+    }
+    .workload-table th:first-child, .workload-table td:first-child { text-align: left; }
+    .workload-table td { text-align: right; font-variant-numeric: tabular-nums; }
+    .workload-table td:nth-child(2) { color: var(--navy); font-weight: 800; }
+    .workload-table td:nth-child(3) { color: var(--teal); }
+    .workload-table td:nth-child(4) { color: var(--orange); }
+    .workload-table tfoot td {
+      border-bottom: 0; border-top: 2px solid var(--line); font-weight: 800;
+    }
+    .workload-empty { padding: 18px 6px !important; color: var(--muted) !important; text-align: center !important; }
     .view-panel[hidden] { display: none; }
     .planner-card { padding: 20px; }
     .planner-grid { display: grid; grid-template-columns: 140px 1fr 110px; gap: 12px; align-items: center; margin-top: 17px; }
@@ -145,9 +165,9 @@
     .pagination { display: flex; align-items: center; gap: 8px; }
     .page-button { border: 1px solid #cdd9de; border-radius: 7px; padding: 6px 10px; background: #fff; color: var(--ink); cursor: pointer; font-weight: 700; }
     .page-button:disabled { cursor: default; opacity: .4; }
-    @media (max-width: 1200px) { .dashboard { grid-template-columns: 1fr; } .side-column { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 1200px) { .dashboard { grid-template-columns: 1fr; } .side-column { grid-template-columns: 1fr 1fr; } .workload-card { grid-column: 2; } }
     @media (max-width: 900px) { .metrics { grid-template-columns: 1fr 1fr; } .composition { grid-template-columns: 1fr; } .breakdown-filters { grid-template-columns: 1fr 1fr; } .kpi-filter-bar { align-items: flex-start; flex-wrap: wrap; } .kpi-filter-result { border-left: 0; padding-left: 0; text-align: left; } }
-    @media (max-width: 680px) { .hero, .control-row { align-items: flex-start; flex-direction: column; min-width: 0; } .hero > div:first-child { width: 100%; } .hero > div, .control-row > *, .card-title > * { max-width: 100%; min-width: 0; } .lead { width: 100%; max-width: 100%; } .metrics, .side-column { grid-template-columns: 1fr; } .hero-actions { width: 100%; } .trend-card { min-width: 0; overflow: hidden; } .trend-card .card-title { flex-direction: column; } .chart-legend { width: 100%; } .status-chart { width: 100%; max-width: 100%; overflow-x: auto; } .bar-plot { min-width: 310px; gap: 8px; padding: 0; } .bar-group { width: 43px; } .stacked-bar { width: 28px; } .planner-grid { grid-template-columns: 100px 1fr; } .planner-values { grid-column: 2; } .breakdown-head, .period-selector { flex-direction: column; align-items: stretch; } .period-buttons { justify-content: flex-start; } .breakdown-head .button { align-self: flex-start; } .breakdown-filters { grid-template-columns: 1fr; } .table-footer { flex-direction: column; gap: 9px; } .pagination { flex-wrap: wrap; } .kpi-filter-bar { flex-direction: column; } .kpi-filter-label, .kpi-filter-result { min-width: 0; width: 100%; } }
+    @media (max-width: 680px) { .hero, .control-row { align-items: flex-start; flex-direction: column; min-width: 0; } .hero > div:first-child { width: 100%; } .hero > div, .control-row > *, .card-title > * { max-width: 100%; min-width: 0; } .lead { width: 100%; max-width: 100%; } .metrics, .side-column { grid-template-columns: 1fr; } .workload-card { grid-column: auto; } .hero-actions { width: 100%; } .trend-card { min-width: 0; overflow: hidden; } .trend-card .card-title { flex-direction: column; } .chart-legend { width: 100%; } .status-chart { width: 100%; max-width: 100%; overflow-x: auto; } .bar-plot { min-width: 310px; gap: 8px; padding: 0; } .bar-group { width: 43px; } .stacked-bar { width: 28px; } .planner-grid { grid-template-columns: 100px 1fr; } .planner-values { grid-column: 2; } .breakdown-head, .period-selector { flex-direction: column; align-items: stretch; } .period-buttons { justify-content: flex-start; } .breakdown-head .button { align-self: flex-start; } .breakdown-filters { grid-template-columns: 1fr; } .table-footer { flex-direction: column; gap: 9px; } .pagination { flex-wrap: wrap; } .kpi-filter-bar { flex-direction: column; } .kpi-filter-label, .kpi-filter-result { min-width: 0; width: 100%; } }
   </style>
 </head>
 <body>
@@ -256,6 +276,16 @@
               <div class="card-title"><div><h2>ABC class health</h2><div class="caption">Item count and reconciliation rate by priority class</div></div><span class="pill gray" id="abcMonth"></span></div>
               <div class="abc-list" id="abcList"></div>
             </article>
+
+            <article class="workload-card card reveal delay-3">
+              <div class="card-title"><div><h2>Original exception workload</h2><div class="caption">Planner-review population before reconciliation</div></div><span class="pill orange" id="workloadMonth"></span></div>
+              <div class="workload-note">Original exceptions include items still in Exceptions and items manually reconciled. Automatically reconciled items are excluded.</div>
+              <table class="workload-table">
+                <thead><tr><th>ABC Class</th><th>Original</th><th>Manually<br>Reconciled</th><th>Still in<br>Exceptions</th></tr></thead>
+                <tbody id="workloadRows"></tbody>
+                <tfoot id="workloadTotal"></tfoot>
+              </table>
+            </article>
           </aside>
         </div>
       </section>
@@ -356,6 +386,9 @@
         exceptions: sum("exceptions"),
         automatic: sum("automatic"),
         manual: sum("manual"),
+        originalExceptions: scopes.every(([, scope]) => Number.isFinite(scope.originalExceptions))
+          ? sum("originalExceptions")
+          : null,
         planner,
         overrides: planner.reconciled.withOverrides + planner.exceptions.withOverrides,
         sources: [...sources.values()],
@@ -638,6 +671,45 @@
       }).join("");
     }
 
+    function originalExceptionScopes(month) {
+      const selected = state.selectedKpiAbcClasses;
+      return Object.entries(month.kpiByAbc || {})
+        .filter(([label]) => selected.size === 0 || selected.has(label))
+        .sort(([left], [right]) => left.localeCompare(right));
+    }
+
+    function renderOriginalExceptionWorkload(month) {
+      document.getElementById("workloadMonth").textContent = month.label;
+      const scopes = originalExceptionScopes(month);
+      const rows = document.getElementById("workloadRows");
+      const total = document.getElementById("workloadTotal");
+      const hasData = scopes.length > 0
+        && scopes.every(([, scope]) => Number.isFinite(scope.originalExceptions));
+
+      if (!hasData) {
+        rows.innerHTML = `<tr><td class="workload-empty" colspan="4">Original exception data is not available for ${escapeHtml(month.label)} ${escapeHtml(month.year)}.</td></tr>`;
+        total.innerHTML = "";
+        return;
+      }
+
+      rows.innerHTML = scopes.map(([label, scope]) => `
+        <tr>
+          <td><strong>${escapeHtml(label)}</strong></td>
+          <td>${fmt.format(scope.originalExceptions)}</td>
+          <td>${fmt.format(scope.manual)}</td>
+          <td>${fmt.format(scope.exceptions)}</td>
+        </tr>
+      `).join("");
+
+      const sums = field => scopes.reduce((value, [, scope]) => value + scope[field], 0);
+      total.innerHTML = `<tr>
+        <td>Total</td>
+        <td>${fmt.format(sums("originalExceptions"))}</td>
+        <td>${fmt.format(sums("manual"))}</td>
+        <td>${fmt.format(sums("exceptions"))}</td>
+      </tr>`;
+    }
+
     function setFilterOptions(select, firstLabel, values) {
       const previousValue = select.value;
       select.replaceChildren(new Option(firstLabel, ""));
@@ -768,6 +840,7 @@
       renderPlanner(month);
       renderInsights(month, previous);
       renderAbc(month);
+      renderOriginalExceptionWorkload(selectedMonth());
     }
 
     function selectMonth(index) {
@@ -808,6 +881,7 @@
         ["Overall", "Total Items", month.exceptions, month.reconciled, month.total],
         ["Reconciliation", "Automatically Reconciled", "", month.automatic, month.automatic],
         ["Reconciliation", "Manually Reconciled", "", month.manual, month.manual],
+        ["Exception Workload", "Original Exceptions", month.exceptions, month.manual, month.originalExceptions ?? ""],
         ["Planner Overrides", "With User Overrides", month.planner.exceptions.withOverrides, month.planner.reconciled.withOverrides, month.overrides],
         ...month.sources.map(source => ["Forecast Source", source.label, source.exceptions, source.reconciled, source.count]),
         ...month.abc.map(row => ["ABC Class", row.label, row.exceptions, row.reconciled, row.total])
