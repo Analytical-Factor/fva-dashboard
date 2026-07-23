@@ -305,7 +305,7 @@
 
           <aside class="side-column">
             <article class="attention card reveal delay-2">
-              <div class="card-title"><div><h2>What changed</h2><div class="caption">Signals worth reviewing this month</div></div><span class="pill orange">3 insights</span></div>
+              <div class="card-title"><div><h2>What changed</h2><div class="caption">Signals worth reviewing this month</div></div><span class="pill orange" id="insightCount">3 insights</span></div>
               <div class="attention-list" id="attentionList"></div>
             </article>
 
@@ -728,28 +728,34 @@
       const previousRate = previous ? rateOf(previous.reconciled, previous.total) : reconciliationRate;
       const delta = reconciliationRate - previousRate;
       const topSource = [...month.sources].sort((left, right) => right.count - left.count)[0];
-      const lowestClasses = [...month.abc]
-        .filter(row => row.total > 0)
-        .sort((left, right) => rateOf(left.reconciled, left.total) - rateOf(right.reconciled, right.total))
-        .slice(0, 2);
-      const classNames = lowestClasses.map(row => row.label).join(" and ");
-      const classVerb = lowestClasses.length === 1 ? "has" : "have";
       const direction = delta >= 0 ? "rose" : "fell";
       const attentionList = document.getElementById("attentionList");
-
-      attentionList.innerHTML = `
-        <div class="attention-item">
+      const insights = [
+        `<div class="attention-item">
           <strong>${previous ? `Reconciliation rate ${direction} ${Math.abs(delta).toFixed(1)} points` : "Baseline reconciliation rate established"}</strong>
           <span>${month.label} closed at ${reconciliationRate.toFixed(1)}%${previous ? `, ${direction === "rose" ? "up" : "down"} from ${previousRate.toFixed(1)}% in ${previous.label}` : " for the first available audit month"}.</span>
-        </div>
-        <div class="attention-item">
+        </div>`,
+        `<div class="attention-item">
           <strong>${escapeHtml(topSource.label)} is the largest source group</strong>
           <span>${fmt.format(topSource.count)} items, or ${rateOf(topSource.count, month.total).toFixed(1)}%, use this source classification.</span>
-        </div>
-        <div class="attention-item">
+        </div>`
+      ];
+
+      if (state.selectedKpiAbcClasses.size !== 1) {
+        const lowestClasses = [...month.abc]
+          .filter(row => row.total > 0)
+          .sort((left, right) => rateOf(left.reconciled, left.total) - rateOf(right.reconciled, right.total))
+          .slice(0, 2);
+        const classNames = lowestClasses.map(row => row.label).join(" and ");
+        const classVerb = lowestClasses.length === 1 ? "has" : "have";
+        insights.push(`<div class="attention-item">
           <strong>${escapeHtml(classNames)} ${classVerb} the lowest reconciliation rate${lowestClasses.length === 1 ? "" : "s"}</strong>
           <span>Review these classes first when prioritizing exception reduction.</span>
-        </div>`;
+        </div>`);
+      }
+
+      document.getElementById("insightCount").textContent = `${insights.length} insights`;
+      attentionList.innerHTML = insights.join("");
     }
 
     function renderAbc(month) {

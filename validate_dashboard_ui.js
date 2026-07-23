@@ -500,6 +500,14 @@ async function main() {
       await page.locator('[data-abc-class="' + classes[0] + '"]').click();
       const scopedMonth = aggregateClassKpis(month, classes.slice(0, 1));
       assert(
+        (await page.locator("#insightCount").innerText()) === "2 insights",
+        month.label + ": single-class insight count mismatch"
+      );
+      assert(
+        (await page.locator("#attentionList .attention-item").count()) === 2,
+        month.label + ": single-class view includes the class-ranking insight"
+      );
+      assert(
         (await page.locator("#totalValue").innerText()) === numberFormat.format(scopedMonth.total),
         month.label + ": single-class audited item card mismatch"
       );
@@ -531,6 +539,10 @@ async function main() {
         );
       }
       await page.locator('[data-abc-class="all"]').click();
+      assert(
+        (await page.locator("#insightCount").innerText()) === "3 insights",
+        month.label + ": all-class insight count mismatch"
+      );
     }
 
     const aprilIndex = data.months.findIndex((month) => month.key === "2026-04");
