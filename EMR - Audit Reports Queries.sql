@@ -11,7 +11,7 @@ Contents:
 
 Backup parameter:
 Set every target_month_start value to the first day of the month represented by
-the database backup. For the current February 2026 backup, use DATE '2026-02-01'.
+the database backup. For the current March 2026 backup, use DATE '2026-03-01'.
 Only section separators were added to make the file easier to navigate.
 ===============================================================================
 */
@@ -52,7 +52,7 @@ Only section separators were added to make the file easier to navigate.
 -- All ds_matrix and ds_data logic is limited to demand_class_id = 0.
 
 WITH params AS (
-    SELECT DATE '2026-02-01' AS target_month_start
+    SELECT DATE '2026-03-01' AS target_month_start
 ),
 month_window AS (
     SELECT
@@ -272,7 +272,7 @@ ORDER BY
 --   Items with volume_adjustment_required = true are counted separately.
 
 WITH params AS (
-    SELECT DATE '2026-02-01' AS target_month_start
+    SELECT DATE '2026-03-01' AS target_month_start
 ),
 base_items AS (
     SELECT
